@@ -1,7 +1,8 @@
+
 import React, { useState, useMemo } from 'react';
 import { useData } from '../hooks/useData';
-import { Practice, Category, Subcategory, Activity, SemaphoreStatus, Document } from '../types';
-import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon } from './Icons';
+import { Practice, Category, Subcategory, Activity, Document } from '../types';
+import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon, CheckIcon, XMarkIcon } from './Icons';
 import Card from './ui/Card';
 import SemaphoreBadge from './ui/Badge';
 import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
@@ -134,6 +135,8 @@ const PracticesExplorer: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingActivity, setEditingActivity] = useState<Partial<Activity> | null>(null);
+    
+    const [editing, setEditing] = useState<{ type: 'category' | 'subcategory' | null, id: string | null, name: string }>({ type: null, id: null, name: '' });
 
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
@@ -166,6 +169,19 @@ const PracticesExplorer: React.FC = () => {
         return currentUser ? roles.find(r => r.id === currentUser.roleId) : null;
     }, [currentUser, roles]);
 
+    const canEdit = (categoryId: string) => {
+        if (!currentUser || !userRole) return false;
+        if (userRole.permissions.canViewAllCategories) return true;
+        const permission = currentUser.permissions.find(p => p.categoryId === categoryId);
+        return permission?.canEdit || false;
+    }
+
+    const canUserEditCategory = useMemo(() => {
+        if (!selectedCategory) return false;
+        return canEdit(selectedCategory.id);
+    }, [currentUser, selectedCategory, userRole]);
+
+
     const visiblePractices = useMemo(() => {
         if (!currentUser || !userRole) return [];
         if (userRole.permissions.canViewAllCategories) return practices;
@@ -186,22 +202,17 @@ const PracticesExplorer: React.FC = () => {
         }, {} as Record<string, Practice[]>);
     }, [visiblePractices]);
 
-    const canUserEditCategory = useMemo(() => {
-        if (!currentUser || !selectedCategory || !userRole) return false;
-        if (userRole.permissions.canViewAllCategories) return true;
-        const permission = currentUser.permissions.find(p => p.categoryId === selectedCategory.id);
-        return permission?.canEdit || false;
-    }, [currentUser, selectedCategory, userRole]);
-
     const handleSelectPractice = (practice: Practice) => {
         setSelectedPractice(practice);
         setSelectedCategory(practice.categories[0] || null);
+        setEditing({ type: null, id: null, name: '' });
     };
     
     const handleSelectCategory = (category: Category) => {
         setSelectedCategory(category);
     }
     
+    // Activity Handlers
     const handleAddActivity = (subcategoryId: string) => {
         setSelectedSubcategory(selectedCategory?.subcategories.find(s => s.id === subcategoryId) || null);
         setEditingActivity({ documents: [] });
@@ -321,6 +332,80 @@ const PracticesExplorer: React.FC = () => {
         });
     };
     
+    // Editing Handlers
+    const handleStartEdit = (type: 'category' | 'subcategory', id: string, name: string) => {
+        setEditing({ type, id, name });
+    };
+
+    const handleCancelEdit = () => {
+        setEditing({ type: null, id: null, name: '' });
+    };
+
+    const handleSaveEdit = () => {
+        if (!editing.id || !editing.type) return;
+
+        setPractices(prev => prev.map(p => {
+            if (editing.type === 'category') {
+                const categoryExists = p.categories.some(c => c.id === editing.id);
+                if (!categoryExists) return p;
+                return { ...p, categories: p.categories.map(c => c.id === editing.id ? { ...c, name: editing.name } : c) };
+            }
+            if (editing.type === 'subcategory') {
+                 return { ...p, categories: p.categories.map(c => ({
+                    ...c,
+                    subcategories: c.subcategories.map(s => s.id === editing.id ? { ...s, name: editing.name } : s)
+                 }))};
+            }
+            return p;
+        }));
+        
+        handleCancelEdit();
+    };
+
+    // Category/Subcategory Management Handlers
+    const handleAddCategory = () => {
+        const name = window.prompt('Introduce el nombre de la nueva categoría:');
+        if (name && selectedPractice) {
+            const newCategory: Category = { id: `cat-${Date.now()}`, name, subcategories: [] };
+            setPractices(prev => prev.map(p => p.id === selectedPractice.id ? { ...p, categories: [...p.categories, newCategory] } : p));
+        }
+    };
+    
+    const handleDeleteCategory = (categoryId: string) => {
+        if (window.confirm('¿Seguro que quieres eliminar esta categoría y todo su contenido?')) {
+            setPractices(prev => prev.map(p => ({
+                ...p,
+                categories: p.categories.filter(c => c.id !== categoryId)
+            })));
+            if (selectedCategory?.id === categoryId) {
+                setSelectedCategory(null);
+            }
+        }
+    };
+
+    const handleAddSubcategory = () => {
+        const name = window.prompt('Introduce el nombre de la nueva subcategoría:');
+        if (name && selectedCategory) {
+            const newSubcategory: Subcategory = { id: `subcat-${Date.now()}`, name, activities: [] };
+            setPractices(prev => prev.map(p => ({
+                ...p,
+                categories: p.categories.map(c => c.id === selectedCategory.id ? { ...c, subcategories: [...c.subcategories, newSubcategory] } : c)
+            })));
+        }
+    };
+
+    const handleDeleteSubcategory = (subcategoryId: string) => {
+        if (window.confirm('¿Seguro que quieres eliminar esta subcategoría y todas sus actividades?')) {
+            setPractices(prev => prev.map(p => ({
+                ...p,
+                categories: p.categories.map(c => ({
+                    ...c,
+                    subcategories: c.subcategories.filter(s => s.id !== subcategoryId)
+                }))
+            })));
+        }
+    };
+
     const filteredSubcategories = useMemo(() => {
         if (!selectedCategory) return [];
 
@@ -379,7 +464,7 @@ const PracticesExplorer: React.FC = () => {
                 {selectedPractice ? (
                     <div className="space-y-6">
                         <Card>
-                            <div className="flex justify-between items-start">
+                             <div className="flex justify-between items-start">
                                 <div>
                                     <h1 className="text-2xl font-bold text-gray-800">{selectedPractice.name}</h1>
                                     <p className="text-sm text-gray-500">{selectedPractice.group}</p>
@@ -409,41 +494,75 @@ const PracticesExplorer: React.FC = () => {
                             </div>
                             <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-start flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600">
                                 <span className="font-semibold mr-2">Leyenda de Estados:</span>
-                                <div className="flex items-center">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5"></span>
-                                    <span>A tiempo / Completado</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 mr-1.5"></span>
-                                    <span>Por iniciar</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-1.5"></span>
-                                    <span>Vencido / Atrasado</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-gray-400 mr-1.5"></span>
-                                    <span>No iniciado</span>
-                                </div>
+                                <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5"></span><span>A tiempo / Completado</span></div>
+                                <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-orange-500 mr-1.5"></span><span>Por iniciar</span></div>
+                                <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-1.5"></span><span>Vencido / Atrasado</span></div>
+                                <div className="flex items-center"><span className="w-2.5 h-2.5 rounded-full bg-gray-400 mr-1.5"></span><span>No iniciado</span></div>
                             </div>
                         </Card>
                         
                         <div className="flex items-start space-x-6">
-                            <nav className="w-1/4 space-y-2">
+                            <nav className="w-1/4 space-y-1">
                                 <h3 className="font-semibold text-gray-600 px-2 mb-1">Categorías</h3>
                                 {selectedPractice.categories.map(cat => (
-                                    <button key={cat.id} onClick={() => handleSelectCategory(cat)} className={`w-full text-left py-2 px-3 text-sm font-medium rounded-lg truncate ${selectedCategory?.id === cat.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                                        {cat.name}
-                                    </button>
+                                     <div key={cat.id} className={`group flex items-center justify-between rounded-lg ${selectedCategory?.id === cat.id ? 'bg-indigo-50' : ''}`}>
+                                        {editing.type === 'category' && editing.id === cat.id ? (
+                                             <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex-1 flex items-center p-1 space-x-1">
+                                                <input type="text" value={editing.name} onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} autoFocus className="w-full text-sm px-2 py-1 border border-indigo-300 rounded-md" />
+                                                <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-4 h-4" /></button>
+                                                <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-4 h-4" /></button>
+                                            </form>
+                                        ) : (
+                                            <>
+                                                <button onClick={() => handleSelectCategory(cat)} className={`w-full text-left py-2 px-3 text-sm font-medium rounded-lg truncate ${selectedCategory?.id === cat.id ? 'text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                                                    {cat.name}
+                                                </button>
+                                                {canEdit(cat.id) && (
+                                                     <div className="opacity-0 group-hover:opacity-100 flex items-center pr-2 space-x-1">
+                                                        <button onClick={() => handleStartEdit('category', cat.id, cat.name)} className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200" title="Editar"><PencilIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleDeleteCategory(cat.id)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-200" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
+                                     </div>
                                 ))}
+                                {userRole?.permissions.canViewAllCategories && (
+                                     <button onClick={handleAddCategory} className="w-full mt-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-md py-2 flex items-center justify-center">
+                                        <PlusIcon className="w-4 h-4 mr-1" /> Añadir Categoría
+                                    </button>
+                                )}
                             </nav>
 
                             <div className="flex-1 space-y-4">
+                                {selectedCategory && canUserEditCategory && (
+                                    <div className="flex justify-end">
+                                        <button onClick={handleAddSubcategory} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                                            <PlusIcon className="mr-1" /> Añadir Subcategoría
+                                        </button>
+                                    </div>
+                                )}
                                 {filteredSubcategories.map(sub => (
                                     <Card key={sub.id}>
-                                        <div className="flex justify-between items-center mb-3">
-                                            <h3 className="font-semibold text-lg">{sub.name}</h3>
-                                            {canUserEditCategory && (
+                                        <div className="flex justify-between items-center mb-3 group">
+                                            {editing.type === 'subcategory' && editing.id === sub.id ? (
+                                                <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex-1 flex items-center space-x-2">
+                                                    <input type="text" value={editing.name} onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} autoFocus className="w-full text-lg font-semibold px-2 py-1 border border-indigo-300 rounded-md" />
+                                                    <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-5 h-5" /></button>
+                                                    <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-5 h-5" /></button>
+                                                </form>
+                                            ) : (
+                                                 <div className="flex items-center">
+                                                    <h3 className="font-semibold text-lg">{sub.name}</h3>
+                                                    {canUserEditCategory && (
+                                                        <div className="opacity-0 group-hover:opacity-100 flex items-center ml-2 space-x-1">
+                                                            <button onClick={() => handleStartEdit('subcategory', sub.id, sub.name)} className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200" title="Editar"><PencilIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleDeleteSubcategory(sub.id)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-200" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {canUserEditCategory && editing.id !== sub.id && (
                                                 <button onClick={() => handleAddActivity(sub.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
                                                     <PlusIcon className="mr-1" /> Añadir Actividad
                                                 </button>
@@ -464,24 +583,14 @@ const PracticesExplorer: React.FC = () => {
                                                                     <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
                                                                 </div>
                                                                 <div className="flex items-center space-x-1">
-                                                                    {canUserEditCategory && (
-                                                                        <button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>
-                                                                    )}
-                                                                    {userRole?.permissions.canCloneActivity && (
-                                                                        <button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>
-                                                                    )}
-                                                                    {userRole?.permissions.canDeleteActivity && (
-                                                                         <button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>
-                                                                    )}
+                                                                    {canUserEditCategory && (<button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>)}
+                                                                    {userRole?.permissions.canCloneActivity && (<button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>)}
+                                                                    {userRole?.permissions.canDeleteActivity && (<button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>)}
                                                                 </div>
                                                             </div>
                                                         </div>
                                                         <div className="mt-2 text-sm text-gray-600">{act.description}</div>
-                                                        {act.documents.length > 0 && (
-                                                            <div className="mt-2 flex items-center text-xs text-gray-500">
-                                                                <PaperClipIcon className="mr-1.5" /> {act.documents.length} adjuntos
-                                                            </div>
-                                                        )}
+                                                        {act.documents.length > 0 && ( <div className="mt-2 flex items-center text-xs text-gray-500"><PaperClipIcon className="mr-1.5" /> {act.documents.length} adjuntos</div> )}
                                                     </li>
                                                 ))}
                                             </ul>
