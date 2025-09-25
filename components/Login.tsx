@@ -53,7 +53,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div className="w-full max-w-md">
                 <Card>
                     <div className="text-center mb-8">
-                        <h1 className="text-3xl font-bold text-indigo-600">ITIL Tracker</h1>
+                        <h1 className="text-3xl font-bold text-indigo-600">OPERTI</h1>
                         <p className="mt-2 text-sm text-gray-600">Iniciar sesión en su cuenta</p>
                     </div>
                     <form className="space-y-6" onSubmit={handleLogin}>

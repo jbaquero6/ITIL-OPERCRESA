@@ -7,9 +7,8 @@ import Dashboard from './components/Dashboard';
 import PracticesExplorer from './components/PracticesExplorer';
 import Users from './components/Users';
 import Authentication from './components/Authentication';
-import AccessRequests from './components/AccessRequests';
 import Login from './components/Login';
-import { HomeIcon, FolderIcon, UsersIcon, BellIcon, KeyIcon, ArrowLeftOnRectangleIcon, UserCircleIcon } from './components/Icons';
+import { HomeIcon, FolderIcon, UsersIcon, KeyIcon, ArrowLeftOnRectangleIcon, UserCircleIcon } from './components/Icons';
 
 const NavItem: FC<{ id: string; label: string; icon: React.FC<{className?: string}>; activeView: string; setActiveView: (view: string) => void }> = ({ id, label, icon: IconComponent, activeView, setActiveView }) => {
     const isActive = activeView === id;
@@ -35,15 +34,14 @@ const Sidebar: FC<{ activeView: string; setActiveView: (view: string) => void; h
     ];
     
     const adminNavItems = [
-        { id: 'users', label: 'Gestión de Usuarios', icon: UsersIcon },
-        { id: 'access-requests', label: 'Solicitudes de Acceso', icon: BellIcon },
+        { id: 'users', label: 'Usuarios', icon: UsersIcon },
         { id: 'authentication', label: 'Autenticación', icon: KeyIcon },
     ];
 
     return (
         <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
             <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
-                <h1 className="text-2xl font-bold text-indigo-600">ITIL Tracker</h1>
+                <h1 className="text-2xl font-bold text-indigo-600">OPERTI</h1>
             </div>
             <nav className="flex-1 px-4 py-6 space-y-2">
                 {navItems.map(item => (
@@ -100,8 +98,6 @@ const App: React.FC = () => {
                 return <PracticesExplorer />;
             case 'users':
                 return <Users />;
-            case 'access-requests':
-                return <AccessRequests />;
             case 'authentication':
                 return <Authentication />;
             default:

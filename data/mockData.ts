@@ -1,5 +1,7 @@
 
-import { Practice, User, Role, SemaphoreStatus, LdapConfig, AccessRequest, AccessRequestStatus, Activity, AuthType } from '../types';
+
+// FIX: Import AccessRequest and AccessRequestStatus.
+import { Practice, User, Role, SemaphoreStatus, LdapConfig, Activity, AuthType, AccessRequest, AccessRequestStatus } from '../types';
 import { calculateSemaphoreStatus } from '../utils/helpers';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
 
@@ -79,8 +81,27 @@ export const mockLdapConfig: LdapConfig = {
     emailAttribute: 'mail',
 };
 
+// FIX: Add mock data for access requests.
 export const mockAccessRequests: AccessRequest[] = [
-    { id: 'ar1', userId: 'u3', categoryId: 'p0-1-0', status: AccessRequestStatus.PENDING, requestDate: new Date().toISOString() },
-    { id: 'ar2', userId: 'u2', categoryId: 'p2-1-0', status: AccessRequestStatus.APPROVED, requestDate: new Date(Date.now() - 86400000 * 2).toISOString() },
-    { id: 'ar3', userId: 'u3', categoryId: 'p1-1-0', status: AccessRequestStatus.REJECTED, requestDate: new Date(Date.now() - 86400000 * 3).toISOString() },
+    {
+        id: 'req1',
+        userId: 'u2', // John Doe
+        categoryId: 'p2-0-0', // Requesting access to a category Mary Smith has.
+        requestDate: new Date('2023-10-25T10:00:00Z').toISOString(),
+        status: AccessRequestStatus.PENDING,
+    },
+    {
+        id: 'req2',
+        userId: 'u3', // Mary Smith
+        categoryId: 'p1-0-0', // Requesting access to a category John Doe has.
+        requestDate: new Date('2023-10-24T14:30:00Z').toISOString(),
+        status: AccessRequestStatus.APPROVED,
+    },
+    {
+        id: 'req3',
+        userId: 'u2', // John Doe
+        categoryId: 'p0-1-0', // Another category from "Mejora continua"
+        requestDate: new Date('2023-10-22T09:00:00Z').toISOString(),
+        status: AccessRequestStatus.REJECTED,
+    },
 ];

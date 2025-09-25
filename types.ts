@@ -1,3 +1,4 @@
+
 export enum SemaphoreStatus {
     GREEN = 'Verde',
     RED = 'Rojo',
@@ -80,6 +81,7 @@ export interface LdapConfig {
     emailAttribute: string;
 }
 
+// FIX: Add missing types for Access Requests.
 export enum AccessRequestStatus {
     PENDING = 'Pendiente',
     APPROVED = 'Aprobado',
@@ -90,6 +92,6 @@ export interface AccessRequest {
     id: string;
     userId: string;
     categoryId: string;
-    status: AccessRequestStatus;
     requestDate: string;
+    status: AccessRequestStatus;
 }
