@@ -6,11 +6,6 @@ export enum SemaphoreStatus {
     ORANGE = 'Naranja',
 }
 
-export enum Role {
-    ADMIN = 'ADMIN',
-    USER = 'USER',
-}
-
 export enum AuthType {
     LOCAL = 'Local',
     LDAP = 'Directorio Activo',
@@ -58,12 +53,39 @@ export interface Permission {
     canEdit: boolean;
 }
 
+export interface RolePermissions {
+  // View permissions
+  canViewDashboard: boolean;
+  canViewPractices: boolean;
+  canViewUsers: boolean;
+  canViewAuthSettings: boolean;
+  canViewRoleManagement: boolean;
+  canViewAllCategories: boolean; 
+
+  // Action permissions
+  canManageUsers: boolean; 
+  canManageRoles: boolean; 
+  canManageAuthSettings: boolean;
+
+  // Activity-specific permissions
+  canDeleteActivity: boolean;
+  canCloneActivity: boolean;
+}
+
+export interface Role {
+  id: string;
+  name:string;
+  description: string;
+  isDefault?: boolean;
+  permissions: RolePermissions;
+}
+
 export interface User {
     id: string;
     username: string;
     fullName: string;
     email: string;
-    role: Role;
+    roleId: string;
     authType: AuthType;
     password?: string;
     permissions: Permission[];
@@ -81,7 +103,6 @@ export interface LdapConfig {
     emailAttribute: string;
 }
 
-// FIX: Add missing types for Access Requests.
 export enum AccessRequestStatus {
     PENDING = 'Pendiente',
     APPROVED = 'Aprobado',

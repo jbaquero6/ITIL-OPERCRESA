@@ -1,14 +1,15 @@
 
 import React, { useState, FC } from 'react';
 import { DataContext, useData } from './hooks/useData';
-import { mockPractices, mockUsers, mockLdapConfig } from './data/mockData';
+import { mockPractices, mockUsers, mockLdapConfig, mockRoles } from './data/mockData';
 import { Practice, User, LdapConfig, Role } from './types';
 import Dashboard from './components/Dashboard';
 import PracticesExplorer from './components/PracticesExplorer';
 import Users from './components/Users';
 import Authentication from './components/Authentication';
 import Login from './components/Login';
-import { HomeIcon, FolderIcon, UsersIcon, KeyIcon, ArrowLeftOnRectangleIcon, UserCircleIcon } from './components/Icons';
+import RoleManagement from './components/RoleManagement';
+import { HomeIcon, FolderIcon, UsersIcon, KeyIcon, ArrowLeftOnRectangleIcon, UserCircleIcon, ShieldCheckIcon } from './components/Icons';
 
 const NavItem: FC<{ id: string; label: string; icon: React.FC<{className?: string}>; activeView: string; setActiveView: (view: string) => void }> = ({ id, label, icon: IconComponent, activeView, setActiveView }) => {
     const isActive = activeView === id;
@@ -26,17 +27,26 @@ const NavItem: FC<{ id: string; label: string; icon: React.FC<{className?: strin
 };
 
 const Sidebar: FC<{ activeView: string; setActiveView: (view: string) => void; handleLogout: () => void }> = ({ activeView, setActiveView, handleLogout }) => {
-    const { currentUser } = useData();
+    const { currentUser, roles } = useData();
+
+    const userRole = currentUser ? roles.find(r => r.id === currentUser.roleId) : null;
 
     const navItems = [
         { id: 'dashboard', label: 'Panel de Control', icon: HomeIcon },
         { id: 'practices', label: 'Explorador de Prácticas', icon: FolderIcon },
     ];
     
-    const adminNavItems = [
-        { id: 'users', label: 'Usuarios', icon: UsersIcon },
-        { id: 'authentication', label: 'Autenticación', icon: KeyIcon },
-    ];
+    const adminNavItems = [];
+    if (userRole?.permissions.canViewUsers) {
+        adminNavItems.push({ id: 'users', label: 'Usuarios', icon: UsersIcon });
+    }
+    if (userRole?.permissions.canViewRoleManagement) {
+        adminNavItems.push({ id: 'roles', label: 'Roles', icon: ShieldCheckIcon });
+    }
+    if (userRole?.permissions.canViewAuthSettings) {
+        adminNavItems.push({ id: 'authentication', label: 'Autenticación', icon: KeyIcon });
+    }
+
 
     return (
         <aside className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
@@ -47,7 +57,7 @@ const Sidebar: FC<{ activeView: string; setActiveView: (view: string) => void; h
                 {navItems.map(item => (
                     <NavItem key={item.id} {...item} activeView={activeView} setActiveView={setActiveView} />
                 ))}
-                 {currentUser?.role === Role.ADMIN && (
+                 {adminNavItems.length > 0 && (
                     <>
                         <div className="pt-4 mt-4 border-t border-gray-200">
                             <h3 className="px-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Admin</h3>
@@ -81,6 +91,7 @@ const Sidebar: FC<{ activeView: string; setActiveView: (view: string) => void; h
 const App: React.FC = () => {
     const [practices, setPractices] = useState<Practice[]>(mockPractices);
     const [users, setUsers] = useState<User[]>(mockUsers);
+    const [roles, setRoles] = useState<Role[]>(mockRoles);
     const [ldapConfig, setLdapConfig] = useState<LdapConfig>(mockLdapConfig);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [activeView, setActiveView] = useState<string>('dashboard');
@@ -98,6 +109,8 @@ const App: React.FC = () => {
                 return <PracticesExplorer />;
             case 'users':
                 return <Users />;
+            case 'roles':
+                return <RoleManagement />;
             case 'authentication':
                 return <Authentication />;
             default:
@@ -106,7 +119,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <DataContext.Provider value={{ practices, setPractices, users, setUsers, currentUser, ldapConfig, setLdapConfig }}>
+        <DataContext.Provider value={{ practices, setPractices, users, setUsers, roles, setRoles, currentUser, ldapConfig, setLdapConfig }}>
             {!currentUser ? (
                 <Login onLogin={setCurrentUser} />
             ) : (

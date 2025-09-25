@@ -1,15 +1,73 @@
-
-
 // FIX: Import AccessRequest and AccessRequestStatus.
-import { Practice, User, Role, SemaphoreStatus, LdapConfig, Activity, AuthType, AccessRequest, AccessRequestStatus } from '../types';
+import { Practice, User, SemaphoreStatus, LdapConfig, Activity, AuthType, AccessRequest, AccessRequestStatus, Role } from '../types';
 import { calculateSemaphoreStatus } from '../utils/helpers';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
 
+const exampleItilTasks = [
+    { name: "Revisar política de seguridad", description: "Revisar y actualizar anualmente la política de seguridad de la información para alinearla con ISO 27001." },
+    { name: "Análisis de Impacto (BIA)", description: "Realizar un Análisis de Impacto en el Negocio para los servicios críticos identificados." },
+    { name: "Definir KPIs de Incidentes", description: "Definir y documentar los Indicadores Clave de Rendimiento (KPIs) para el proceso de Gestión de Incidentes." },
+    { name: "Plan de migración a la nube", description: "Elaborar el plan detallado para la migración del servidor de base de datos a la plataforma AWS RDS." },
+    { name: "Prueba de recuperación ante desastres", description: "Ejecutar el plan de recuperación ante desastres (DRP) para el sistema de ERP y documentar los resultados." },
+    { name: "Capacitación en nuevo CRM", description: "Impartir capacitación al equipo de soporte sobre las nuevas funcionalidades del sistema CRM." },
+    { name: "Evaluar proveedor de cloud", description: "Realizar una evaluación técnica y financiera de los principales proveedores de servicios en la nube (Azure, AWS, GCP)." },
+    { name: "Auditoría de licencias", description: "Realizar una auditoría interna para verificar el cumplimiento de las licencias de software de Microsoft y Adobe." },
+    { name: "Actualizar Catálogo de Servicios", description: "Añadir el nuevo servicio de 'Soporte para dispositivos móviles' al Catálogo de Servicios." },
+    { name: "Implementar parche de seguridad", description: "Aplicar el último parche de seguridad crítico (CVE-2023-XXXX) en todos los servidores web de producción." },
+    { name: "Revisión de SLAs", description: "Revisar los Acuerdos de Nivel de Servicio (SLAs) con el departamento de finanzas." },
+    { name: "Optimización de base de datos", description: "Realizar tareas de mantenimiento y optimización en la base de datos principal para mejorar el rendimiento." },
+    { name: "Crear informe de capacidad", description: "Generar el informe mensual de capacidad y rendimiento de la infraestructura de servidores." },
+    { name: "Documentar proceso de cambios", description: "Actualizar la documentación del proceso de Habilitación de Cambios para incluir la aprobación del CAB." },
+    { name: "Resolver problema recurrente", description: "Investigar la causa raíz del problema PBI-00123 (fallos intermitentes en la facturación)." }
+];
+
+export const mockRoles: Role[] = [
+    {
+        id: 'role-admin',
+        name: 'Administrador',
+        description: 'Acceso total a todas las funciones y configuraciones.',
+        isDefault: true,
+        permissions: {
+            canViewDashboard: true,
+            canViewPractices: true,
+            canViewUsers: true,
+            canViewAuthSettings: true,
+            canViewRoleManagement: true,
+            canViewAllCategories: true,
+            canManageUsers: true,
+            canManageRoles: true,
+            canManageAuthSettings: true,
+            canDeleteActivity: true,
+            canCloneActivity: true,
+        }
+    },
+    {
+        id: 'role-user',
+        name: 'Usuario',
+        description: 'Puede ver prácticas asignadas y editar actividades si tiene permiso.',
+        isDefault: false,
+        permissions: {
+            canViewDashboard: true,
+            canViewPractices: true,
+            canViewUsers: false,
+            canViewAuthSettings: false,
+            canViewRoleManagement: false,
+            canViewAllCategories: false,
+            canManageUsers: false,
+            canManageRoles: false,
+            canManageAuthSettings: false,
+            canDeleteActivity: false,
+            canCloneActivity: false,
+        }
+    }
+];
+
+
 // Mock users
 export const mockUsers: User[] = [
-    { id: 'u1', username: 'admin', fullName: 'Administrador del Sistema', email: 'admin@example.com', role: Role.ADMIN, authType: AuthType.LOCAL, password: 'admin', permissions: [] },
-    { id: 'u2', username: 'jdoe', fullName: 'John Doe', email: 'jdoe@example.com', role: Role.USER, authType: AuthType.LDAP, permissions: [{ categoryId: 'p0-0-0', canEdit: true }, { categoryId: 'p1-0-0', canEdit: false }] },
-    { id: 'u3', username: 'msmith', fullName: 'Mary Smith', email: 'msmith@example.com', role: Role.USER, authType: AuthType.LOCAL, password: 'password123', permissions: [{ categoryId: 'p2-0-0', canEdit: true }] },
+    { id: 'u1', username: 'admin', fullName: 'Administrador del Sistema', email: 'admin@example.com', roleId: 'role-admin', authType: AuthType.LOCAL, password: 'admin', permissions: [] },
+    { id: 'u2', username: 'jdoe', fullName: 'John Doe', email: 'jdoe@example.com', roleId: 'role-user', authType: AuthType.LDAP, permissions: [{ categoryId: 'p0-0-0', canEdit: true }, { categoryId: 'p1-0-0', canEdit: false }] },
+    { id: 'u3', username: 'msmith', fullName: 'Mary Smith', email: 'msmith@example.com', roleId: 'role-user', authType: AuthType.LOCAL, password: 'password123', permissions: [{ categoryId: 'p2-0-0', canEdit: true }] },
 ];
 
 // Helper to generate activities
@@ -25,10 +83,12 @@ const generateActivities = (count: number, subcategoryId: string): Activity[] =>
             completionDate.setDate(dueDate.getDate() + (Math.random() * 10 - 5));
         }
         
+        const randomTask = exampleItilTasks[Math.floor(Math.random() * exampleItilTasks.length)];
+        
         const activityData = {
             id: `a-${subcategoryId}-${i}`,
-            name: `Actividad ${i}`,
-            description: `Descripción de la actividad ${i}.`,
+            name: randomTask.name,
+            description: randomTask.description,
             responsible: mockUsers[1 + (i % 2)].id,
             dueDate: dueDate.toISOString().split('T')[0],
             completionDate: completionDate ? completionDate.toISOString().split('T')[0] : null,
@@ -93,15 +153,16 @@ export const mockAccessRequests: AccessRequest[] = [
     {
         id: 'req2',
         userId: 'u3', // Mary Smith
-        categoryId: 'p1-0-0', // Requesting access to a category John Doe has.
-        requestDate: new Date('2023-10-24T14:30:00Z').toISOString(),
+        // FIX: Completed the mock AccessRequest object which was previously truncated.
+        categoryId: 'p1-0-0', // Requesting access to a category John Doe has read-only.
+        requestDate: new Date('2023-10-26T14:30:00Z').toISOString(),
         status: AccessRequestStatus.APPROVED,
     },
     {
         id: 'req3',
-        userId: 'u2', // John Doe
-        categoryId: 'p0-1-0', // Another category from "Mejora continua"
-        requestDate: new Date('2023-10-22T09:00:00Z').toISOString(),
+        userId: 'u3', // Mary Smith
+        categoryId: 'p0-0-0', // Requesting access to a category John Doe has edit rights for.
+        requestDate: new Date('2023-10-27T09:00:00Z').toISOString(),
         status: AccessRequestStatus.REJECTED,
     },
 ];

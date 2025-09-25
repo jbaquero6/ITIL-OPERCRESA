@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../hooks/useData';
-import { Practice, Category, Subcategory, Activity, Role, SemaphoreStatus, Document } from '../types';
+import { Practice, Category, Subcategory, Activity, SemaphoreStatus, Document } from '../types';
 import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon } from './Icons';
 import Card from './ui/Card';
 import SemaphoreBadge from './ui/Badge';
@@ -126,7 +126,7 @@ const ActivityForm: React.FC<{
 
 
 const PracticesExplorer: React.FC = () => {
-    const { practices, setPractices, currentUser, users } = useData();
+    const { practices, setPractices, currentUser, users, roles } = useData();
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [selectedPractice, setSelectedPractice] = useState<Practice | null>(null);
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -135,9 +135,40 @@ const PracticesExplorer: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingActivity, setEditingActivity] = useState<Partial<Activity> | null>(null);
 
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth();
+
+    const [selectedYear, setSelectedYear] = useState<number | 'all'>(currentYear);
+    const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(currentMonth);
+
+    const years = useMemo(() => {
+        const allYears = new Set<number>([currentYear]);
+        practices.forEach(p => 
+            p.categories.forEach(c => 
+                c.subcategories.forEach(sc => 
+                    sc.activities.forEach(a => {
+                        if (a.dueDate) {
+                            allYears.add(new Date(a.dueDate).getFullYear());
+                        }
+                    })
+                )
+            )
+        );
+        return Array.from(allYears).sort((a, b) => b - a);
+    }, [practices]);
+
+    const months = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"
+    ];
+
+    const userRole = useMemo(() => {
+        return currentUser ? roles.find(r => r.id === currentUser.roleId) : null;
+    }, [currentUser, roles]);
+
     const visiblePractices = useMemo(() => {
-        if (!currentUser) return [];
-        if (currentUser.role === Role.ADMIN) return practices;
+        if (!currentUser || !userRole) return [];
+        if (userRole.permissions.canViewAllCategories) return practices;
 
         const allowedCategoryIds = new Set(currentUser.permissions.map(p => p.categoryId));
         return practices
@@ -146,7 +177,7 @@ const PracticesExplorer: React.FC = () => {
                 categories: p.categories.filter(c => allowedCategoryIds.has(c.id)),
             }))
             .filter(p => p.categories.length > 0);
-    }, [practices, currentUser]);
+    }, [practices, currentUser, userRole]);
 
     const practicesByGroup = useMemo(() => {
         return visiblePractices.reduce((acc, practice) => {
@@ -156,11 +187,11 @@ const PracticesExplorer: React.FC = () => {
     }, [visiblePractices]);
 
     const canUserEditCategory = useMemo(() => {
-        if (!currentUser || !selectedCategory) return false;
-        if (currentUser.role === Role.ADMIN) return true;
+        if (!currentUser || !selectedCategory || !userRole) return false;
+        if (userRole.permissions.canViewAllCategories) return true;
         const permission = currentUser.permissions.find(p => p.categoryId === selectedCategory.id);
         return permission?.canEdit || false;
-    }, [currentUser, selectedCategory]);
+    }, [currentUser, selectedCategory, userRole]);
 
     const handleSelectPractice = (practice: Practice) => {
         setSelectedPractice(practice);
@@ -290,6 +321,23 @@ const PracticesExplorer: React.FC = () => {
         });
     };
     
+    const filteredSubcategories = useMemo(() => {
+        if (!selectedCategory) return [];
+
+        return selectedCategory.subcategories.map(sub => ({
+            ...sub,
+            activities: sub.activities.filter(activity => {
+                if (!activity.dueDate) return false; 
+                const activityDate = new Date(activity.dueDate);
+
+                const yearMatch = selectedYear === 'all' || activityDate.getFullYear() === selectedYear;
+                const monthMatch = selectedMonth === 'all' || activityDate.getMonth() === selectedMonth;
+
+                return yearMatch && monthMatch;
+            })
+        }));
+    }, [selectedCategory, selectedYear, selectedMonth]);
+
     return (
         <div className="flex h-full space-x-6">
             <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingActivity?.id ? 'Editar Actividad' : 'Nueva Actividad'}>
@@ -331,8 +379,53 @@ const PracticesExplorer: React.FC = () => {
                 {selectedPractice ? (
                     <div className="space-y-6">
                         <Card>
-                            <h1 className="text-2xl font-bold text-gray-800">{selectedPractice.name}</h1>
-                            <p className="text-sm text-gray-500">{selectedPractice.group}</p>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h1 className="text-2xl font-bold text-gray-800">{selectedPractice.name}</h1>
+                                    <p className="text-sm text-gray-500">{selectedPractice.group}</p>
+                                </div>
+                                <div className="flex items-center space-x-2 flex-shrink-0">
+                                    <select
+                                        value={selectedMonth}
+                                        onChange={(e) => setSelectedMonth(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                                        className="bg-white border border-gray-300 rounded-md shadow-sm px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="all">Todos los meses</option>
+                                        {months.map((month, index) => (
+                                            <option key={index} value={index}>{month}</option>
+                                        ))}
+                                    </select>
+                                    <select
+                                        value={selectedYear}
+                                        onChange={(e) => setSelectedYear(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                                        className="bg-white border border-gray-300 rounded-md shadow-sm px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                    >
+                                        <option value="all">Todos los años</option>
+                                        {years.map(year => (
+                                            <option key={year} value={year}>{year}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center justify-start flex-wrap gap-x-4 gap-y-2 text-xs text-gray-600">
+                                <span className="font-semibold mr-2">Leyenda de Estados:</span>
+                                <div className="flex items-center">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-1.5"></span>
+                                    <span>A tiempo / Completado</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500 mr-1.5"></span>
+                                    <span>Por iniciar</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-1.5"></span>
+                                    <span>Vencido / Atrasado</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-gray-400 mr-1.5"></span>
+                                    <span>No iniciado</span>
+                                </div>
+                            </div>
                         </Card>
                         
                         <div className="flex items-start space-x-6">
@@ -346,7 +439,7 @@ const PracticesExplorer: React.FC = () => {
                             </nav>
 
                             <div className="flex-1 space-y-4">
-                                {selectedCategory?.subcategories.map(sub => (
+                                {filteredSubcategories.map(sub => (
                                     <Card key={sub.id}>
                                         <div className="flex justify-between items-center mb-3">
                                             <h3 className="font-semibold text-lg">{sub.name}</h3>
@@ -374,11 +467,11 @@ const PracticesExplorer: React.FC = () => {
                                                                     {canUserEditCategory && (
                                                                         <button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>
                                                                     )}
-                                                                    {currentUser?.role === Role.ADMIN && (
-                                                                        <>
-                                                                            <button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>
-                                                                            <button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>
-                                                                        </>
+                                                                    {userRole?.permissions.canCloneActivity && (
+                                                                        <button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>
+                                                                    )}
+                                                                    {userRole?.permissions.canDeleteActivity && (
+                                                                         <button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -393,7 +486,7 @@ const PracticesExplorer: React.FC = () => {
                                                 ))}
                                             </ul>
                                         ) : (
-                                            <p className="text-sm text-gray-500 text-center py-4">No hay actividades en esta subcategoría.</p>
+                                            <p className="text-sm text-gray-500 text-center py-4">No hay actividades para el período seleccionado.</p>
                                         )}
                                     </Card>
                                 ))}

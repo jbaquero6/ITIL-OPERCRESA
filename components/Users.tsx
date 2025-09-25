@@ -14,7 +14,7 @@ const UserForm: React.FC<{
     const [formData, setFormData] = useState<Partial<User>>(user || {});
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const { practices } = useData();
+    const { practices, roles } = useData();
 
     if (!formData) return null;
 
@@ -59,6 +59,8 @@ const UserForm: React.FC<{
         return perm.canEdit ? 'edit' : 'view';
     }
 
+    const selectedRole = roles.find(r => r.id === formData.roleId);
+
     return (
         <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-6">
@@ -76,9 +78,10 @@ const UserForm: React.FC<{
                 </div>
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Rol</label>
-                    <select name="role" value={formData.role || Role.USER} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        <option value={Role.USER}>Usuario</option>
-                        <option value={Role.ADMIN}>Administrador</option>
+                    <select name="roleId" value={formData.roleId || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                        {roles.map(role => (
+                            <option key={role.id} value={role.id}>{role.name}</option>
+                        ))}
                     </select>
                 </div>
                  <div>
@@ -108,7 +111,7 @@ const UserForm: React.FC<{
                 )}
             </div>
             
-            {formData.role === Role.USER && (
+            {selectedRole && !selectedRole.permissions.canViewAllCategories && (
                 <div className="border-t pt-6">
                     <h3 className="text-lg font-medium text-gray-900">Permisos por Categoría</h3>
                     <div className="mt-2 max-h-60 overflow-y-auto border rounded-md p-2 space-y-2 bg-gray-50">
@@ -143,7 +146,7 @@ const UserForm: React.FC<{
 
 
 const Users: React.FC = () => {
-    const { users, setUsers } = useData();
+    const { users, setUsers, roles } = useData();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
 
@@ -158,7 +161,7 @@ const Users: React.FC = () => {
             username: '', 
             fullName: '', 
             email: '', 
-            role: Role.USER, 
+            roleId: roles.find(r => r.name === 'Usuario')?.id || '',
             authType: AuthType.LOCAL,
             permissions: []
         });
@@ -179,7 +182,7 @@ const Users: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingUser?.id ? 'Editar Usuario' : 'Nuevo Usuario'}>
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingUser?.username ? 'Editar Usuario' : 'Nuevo Usuario'}>
                 <UserForm user={editingUser} onClose={() => setIsModalOpen(false)} onSave={handleSaveUser} />
             </Modal>
             
@@ -193,30 +196,33 @@ const Users: React.FC = () => {
 
             <Card>
                 <ul className="divide-y divide-gray-200">
-                    {users.map(user => (
-                        <li key={user.id} className="py-4 flex items-center justify-between">
-                            <div className="flex items-center">
-                                <UserCircleIcon className="w-10 h-10 text-gray-400" />
-                                <div className="ml-3">
-                                    <p className="text-sm font-medium text-gray-900">{user.fullName}</p>
-                                    <div className="flex items-center text-sm text-gray-500">
-                                        <span>{user.email}</span>
-                                        <span className="mx-2 text-gray-300">|</span>
-                                        <span className="font-medium">{user.authType}</span>
+                    {users.map(user => {
+                        const role = roles.find(r => r.id === user.roleId);
+                        return (
+                            <li key={user.id} className="py-4 flex items-center justify-between">
+                                <div className="flex items-center">
+                                    <UserCircleIcon className="w-10 h-10 text-gray-400" />
+                                    <div className="ml-3">
+                                        <p className="text-sm font-medium text-gray-900">{user.fullName}</p>
+                                        <div className="flex items-center text-sm text-gray-500">
+                                            <span>{user.email}</span>
+                                            <span className="mx-2 text-gray-300">|</span>
+                                            <span className="font-medium">{user.authType}</span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center space-x-4">
-                               <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.role === Role.ADMIN ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800'}`}>
-                                    {user.role}
-                               </span>
-                                <div className="flex items-center space-x-2">
-                                    <button onClick={() => handleEditUser(user)} className="text-gray-400 hover:text-indigo-600"><PencilIcon /></button>
-                                    <button onClick={() => alert('Eliminar no implementado')} className="text-gray-400 hover:text-red-600"><TrashIcon /></button>
+                                <div className="flex items-center space-x-4">
+                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${role?.isDefault ? 'bg-indigo-100 text-indigo-800' : 'bg-green-100 text-green-800'}`}>
+                                        {role?.name || 'Sin rol'}
+                                </span>
+                                    <div className="flex items-center space-x-2">
+                                        <button onClick={() => handleEditUser(user)} className="text-gray-400 hover:text-indigo-600"><PencilIcon /></button>
+                                        <button onClick={() => alert('Eliminar no implementado')} className="text-gray-400 hover:text-red-600"><TrashIcon /></button>
+                                    </div>
                                 </div>
-                            </div>
-                        </li>
-                    ))}
+                            </li>
+                        );
+                    })}
                 </ul>
             </Card>
         </div>

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../hooks/useData';
-import { Activity, SemaphoreStatus, Role, Practice } from '../types';
+import { Activity, SemaphoreStatus, Practice } from '../types';
 import Card from './ui/Card';
 import { formatDate } from '../utils/helpers';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
@@ -16,13 +16,17 @@ interface PracticeStats {
 
 
 const Dashboard: React.FC = () => {
-    const { practices, currentUser, users } = useData();
+    const { practices, currentUser, users, roles } = useData();
 
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
 
     const [selectedYear, setSelectedYear] = useState<number | 'all'>(currentYear);
     const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(currentMonth);
+
+     const userRole = useMemo(() => {
+        return currentUser ? roles.find(r => r.id === currentUser.roleId) : null;
+    }, [currentUser, roles]);
 
     const years = useMemo(() => {
         const allYears = new Set<number>([currentYear]);
@@ -46,8 +50,8 @@ const Dashboard: React.FC = () => {
     ];
 
     const visiblePractices = useMemo(() => {
-        if (!currentUser) return [];
-        if (currentUser.role === Role.ADMIN) {
+        if (!currentUser || !userRole) return [];
+        if (userRole.permissions.canViewAllCategories) {
             return practices;
         }
         const allowedCategoryIds = new Set(currentUser.permissions.map(p => p.categoryId));
@@ -57,7 +61,7 @@ const Dashboard: React.FC = () => {
                 categories: p.categories.filter(c => allowedCategoryIds.has(c.id)),
             }))
             .filter(p => p.categories.length > 0);
-    }, [practices, currentUser]);
+    }, [practices, currentUser, userRole]);
 
     const filteredPracticeStats: PracticeStats[] = useMemo(() => {
         return visiblePractices.map(practice => {
