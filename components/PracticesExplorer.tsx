@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../hooks/useData';
 import { Practice, Category, Subcategory, Activity, Role, SemaphoreStatus, Document } from '../types';
-import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon } from './Icons';
+import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon } from './Icons';
 import Card from './ui/Card';
 import SemaphoreBadge from './ui/Badge';
 import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
@@ -155,6 +155,13 @@ const PracticesExplorer: React.FC = () => {
         }, {} as Record<string, Practice[]>);
     }, [visiblePractices]);
 
+    const canUserEditCategory = useMemo(() => {
+        if (!currentUser || !selectedCategory) return false;
+        if (currentUser.role === Role.ADMIN) return true;
+        const permission = currentUser.permissions.find(p => p.categoryId === selectedCategory.id);
+        return permission?.canEdit || false;
+    }, [currentUser, selectedCategory]);
+
     const handleSelectPractice = (practice: Practice) => {
         setSelectedPractice(practice);
         setSelectedCategory(practice.categories[0] || null);
@@ -214,6 +221,73 @@ const PracticesExplorer: React.FC = () => {
 
         setIsModalOpen(false);
         setEditingActivity(null);
+    };
+
+    const handleDeleteActivity = (activityId: string, subcategoryId: string) => {
+        if (!window.confirm('¿Está seguro de que desea eliminar esta actividad? Esta acción no se puede deshacer.')) {
+            return;
+        }
+
+        setPractices(prevPractices => {
+            return prevPractices.map(p => {
+                if (p.id !== selectedPractice?.id) return p;
+                return {
+                    ...p,
+                    categories: p.categories.map(c => {
+                        if (c.id !== selectedCategory?.id) return c;
+                        return {
+                            ...c,
+                            subcategories: c.subcategories.map(sc => {
+                                if (sc.id !== subcategoryId) return sc;
+                                return {
+                                    ...sc,
+                                    activities: sc.activities.filter(a => a.id !== activityId),
+                                };
+                            })
+                        };
+                    })
+                };
+            });
+        });
+    };
+
+    const handleCloneActivity = (activityToClone: Activity, subcategoryId: string) => {
+        const clonedActivityData = JSON.parse(JSON.stringify(activityToClone));
+
+        const newActivity: Partial<Activity> = {
+            ...clonedActivityData,
+            id: `a-${subcategoryId}-${Date.now()}`,
+            name: `Copia de ${clonedActivityData.name}`,
+            progress: 0,
+            completionDate: null,
+        };
+
+        const finalClonedActivity = {
+            ...newActivity,
+            status: calculateSemaphoreStatus(newActivity),
+        } as Activity;
+
+        setPractices(prevPractices => {
+            return prevPractices.map(p => {
+                if (p.id !== selectedPractice?.id) return p;
+                return {
+                    ...p,
+                    categories: p.categories.map(c => {
+                        if (c.id !== selectedCategory?.id) return c;
+                        return {
+                            ...c,
+                            subcategories: c.subcategories.map(sc => {
+                                if (sc.id !== subcategoryId) return sc;
+                                return {
+                                    ...sc,
+                                    activities: [...sc.activities, finalClonedActivity],
+                                };
+                            })
+                        };
+                    })
+                };
+            });
+        });
     };
     
     return (
@@ -276,9 +350,11 @@ const PracticesExplorer: React.FC = () => {
                                     <Card key={sub.id}>
                                         <div className="flex justify-between items-center mb-3">
                                             <h3 className="font-semibold text-lg">{sub.name}</h3>
-                                            <button onClick={() => handleAddActivity(sub.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                                                <PlusIcon className="mr-1" /> Añadir Actividad
-                                            </button>
+                                            {canUserEditCategory && (
+                                                <button onClick={() => handleAddActivity(sub.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                                                    <PlusIcon className="mr-1" /> Añadir Actividad
+                                                </button>
+                                            )}
                                         </div>
                                         {sub.activities.length > 0 ? (
                                             <ul className="divide-y divide-gray-200">
@@ -295,8 +371,15 @@ const PracticesExplorer: React.FC = () => {
                                                                     <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
                                                                 </div>
                                                                 <div className="flex items-center space-x-1">
-                                                                    <button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600"><PencilIcon className="w-4 h-4" /></button>
-                                                                    <button onClick={() => alert('Eliminar no implementado')} className="text-gray-400 hover:text-red-600"><TrashIcon className="w-4 h-4" /></button>
+                                                                    {canUserEditCategory && (
+                                                                        <button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>
+                                                                    )}
+                                                                    {currentUser?.role === Role.ADMIN && (
+                                                                        <>
+                                                                            <button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>
+                                                                            <button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
