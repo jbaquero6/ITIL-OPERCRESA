@@ -1,0 +1,335 @@
+import React, { useState, useMemo } from 'react';
+import { useData } from '../hooks/useData';
+import { Practice, Category, Subcategory, Activity, Role, SemaphoreStatus, Document } from '../types';
+import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon } from './Icons';
+import Card from './ui/Card';
+import SemaphoreBadge from './ui/Badge';
+import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
+import Modal from './ui/Modal';
+
+const ActivityForm: React.FC<{
+    activity: Partial<Activity> | null;
+    onClose: () => void;
+    onSave: (activity: Partial<Activity>) => void;
+}> = ({ activity, onClose, onSave }) => {
+    const [formData, setFormData] = useState({ ...activity, documents: activity?.documents || [] });
+    const { users } = useData();
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({...prev, [name]: value }));
+    };
+    
+    const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const progress = parseInt(e.target.value, 10);
+        const completionDate = progress === 100 ? (formData?.completionDate || new Date().toISOString().split('T')[0]) : null;
+        setFormData(prev => ({ ...prev, progress, completionDate }));
+    };
+
+    const handleDeleteDocument = (docId: string) => {
+        setFormData(prev => ({
+            ...prev,
+            documents: prev?.documents?.filter(d => d.id !== docId) || []
+        }));
+    };
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const newFiles = Array.from(e.target.files).map(file => ({
+                id: `doc-${Date.now()}-${Math.random()}`,
+                name: file.name,
+                url: `#mock-url/${file.name}`
+            }));
+
+            setFormData(prev => ({
+                ...prev,
+                documents: [...(prev?.documents || []), ...newFiles]
+            }));
+        }
+    };
+
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (formData) onSave(formData);
+    };
+
+    if (!formData) return null;
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+             <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre de la Actividad</label>
+                <input type="text" name="name" id="name" value={formData.name || ''} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/>
+            </div>
+            <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
+                <textarea name="description" id="description" value={formData.description || ''} onChange={handleChange} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
+            </div>
+             <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label htmlFor="responsible" className="block text-sm font-medium text-gray-700">Responsable</label>
+                    <select name="responsible" id="responsible" value={formData.responsible || ''} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                        <option value="">Seleccionar...</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                    </select>
+                </div>
+                <div>
+                    <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">Fecha de Vencimiento</label>
+                    <input type="date" name="dueDate" id="dueDate" value={formData.dueDate || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/>
+                </div>
+             </div>
+             <div>
+                <label htmlFor="progress" className="block text-sm font-medium text-gray-700">Progreso: {formData.progress || 0}%</label>
+                <input type="range" min="0" max="100" name="progress" id="progress" value={formData.progress || 0} onChange={handleProgressChange} className="mt-1 block w-full"/>
+             </div>
+             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Evidencias</label>
+                <div className="space-y-2">
+                    {formData.documents && formData.documents.map(doc => (
+                        <div key={doc.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md text-sm">
+                            <div className="flex items-center truncate">
+                                <PaperClipIcon className="w-4 h-4 mr-2 flex-shrink-0 text-gray-500" />
+                                <span className="truncate text-gray-800" title={doc.name}>{doc.name}</span>
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => handleDeleteDocument(doc.id)} 
+                                className="text-gray-400 hover:text-red-600 ml-2">
+                                <TrashIcon className="w-4 h-4" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-2">
+                    <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 border border-dashed border-gray-300 p-2 text-center block">
+                        <span>Seleccionar archivos...</span>
+                        <input 
+                            id="file-upload" 
+                            name="file-upload" 
+                            type="file" 
+                            className="sr-only" 
+                            multiple
+                            onChange={handleFileChange}
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+                        />
+                    </label>
+                </div>
+            </div>
+            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                <button type="button" onClick={onClose} className="bg-white py-2 px-4 border border-gray-300 rounded-md text-sm">Cancelar</button>
+                <button type="submit" className="bg-indigo-600 text-white py-2 px-4 border rounded-md text-sm">Guardar</button>
+            </div>
+        </form>
+    );
+};
+
+
+const PracticesExplorer: React.FC = () => {
+    const { practices, setPractices, currentUser, users } = useData();
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+    const [selectedPractice, setSelectedPractice] = useState<Practice | null>(null);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+    const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
+    
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingActivity, setEditingActivity] = useState<Partial<Activity> | null>(null);
+
+    const visiblePractices = useMemo(() => {
+        if (!currentUser) return [];
+        if (currentUser.role === Role.ADMIN) return practices;
+
+        const allowedCategoryIds = new Set(currentUser.permissions.map(p => p.categoryId));
+        return practices
+            .map(p => ({
+                ...p,
+                categories: p.categories.filter(c => allowedCategoryIds.has(c.id)),
+            }))
+            .filter(p => p.categories.length > 0);
+    }, [practices, currentUser]);
+
+    const practicesByGroup = useMemo(() => {
+        return visiblePractices.reduce((acc, practice) => {
+            (acc[practice.group] = acc[practice.group] || []).push(practice);
+            return acc;
+        }, {} as Record<string, Practice[]>);
+    }, [visiblePractices]);
+
+    const handleSelectPractice = (practice: Practice) => {
+        setSelectedPractice(practice);
+        setSelectedCategory(practice.categories[0] || null);
+    };
+    
+    const handleSelectCategory = (category: Category) => {
+        setSelectedCategory(category);
+    }
+    
+    const handleAddActivity = (subcategoryId: string) => {
+        setSelectedSubcategory(selectedCategory?.subcategories.find(s => s.id === subcategoryId) || null);
+        setEditingActivity({ documents: [] });
+        setIsModalOpen(true);
+    };
+    
+    const handleEditActivity = (activity: Activity, subcategoryId: string) => {
+        setSelectedSubcategory(selectedCategory?.subcategories.find(s => s.id === subcategoryId) || null);
+        setEditingActivity(activity);
+        setIsModalOpen(true);
+    };
+
+    const handleSaveActivity = (activityData: Partial<Activity>) => {
+        setPractices(prevPractices => {
+            return prevPractices.map(p => {
+                if (p.id !== selectedPractice?.id) return p;
+                return {
+                    ...p,
+                    categories: p.categories.map(c => {
+                        if (c.id !== selectedCategory?.id) return c;
+                        return {
+                            ...c,
+                            subcategories: c.subcategories.map(sc => {
+                                if (sc.id !== selectedSubcategory?.id) return sc;
+                                
+                                const finalActivity = {
+                                    ...activityData,
+                                    status: calculateSemaphoreStatus(activityData),
+                                } as Activity;
+
+                                if (activityData.id) { // Editing existing
+                                    return {
+                                        ...sc,
+                                        activities: sc.activities.map(a => a.id === activityData.id ? finalActivity : a),
+                                    };
+                                } else { // Adding new
+                                    return {
+                                        ...sc,
+                                        activities: [...sc.activities, { ...finalActivity, id: `a-${sc.id}-${Date.now()}` }],
+                                    };
+                                }
+                            })
+                        };
+                    })
+                };
+            });
+        });
+
+        setIsModalOpen(false);
+        setEditingActivity(null);
+    };
+    
+    return (
+        <div className="flex h-full space-x-6">
+            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingActivity?.id ? 'Editar Actividad' : 'Nueva Actividad'}>
+                <ActivityForm 
+                    activity={editingActivity} 
+                    onClose={() => setIsModalOpen(false)}
+                    onSave={handleSaveActivity}
+                />
+            </Modal>
+            
+            <aside className="w-1/3 max-w-sm flex-shrink-0">
+                <Card className="h-full overflow-y-auto">
+                    <h2 className="text-xl font-bold mb-4">Prácticas ITIL</h2>
+                    <div className="space-y-1">
+                        {Object.entries(practicesByGroup).map(([groupName, practicesInGroup]) => (
+                            <div key={groupName}>
+                                <button onClick={() => setExpandedGroups(p => ({...p, [groupName]: !p[groupName]}))} className="w-full flex justify-between items-center text-left py-2 px-2 rounded-md hover:bg-gray-100">
+                                    <span className="font-semibold text-gray-800">{groupName}</span>
+                                    {expandedGroups[groupName] ? <ChevronDownIcon /> : <ChevronRightIcon />}
+                                </button>
+                                {expandedGroups[groupName] && (
+                                    <div className="pl-4 py-1 space-y-1">
+                                        {practicesInGroup.map(practice => (
+                                            <div key={practice.id}>
+                                                <button onClick={() => handleSelectPractice(practice)} className={`w-full text-left py-1.5 px-2 text-sm rounded truncate ${selectedPractice?.id === practice.id ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                                    {practice.name}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </Card>
+            </aside>
+            
+            <main className="flex-1">
+                {selectedPractice ? (
+                    <div className="space-y-6">
+                        <Card>
+                            <h1 className="text-2xl font-bold text-gray-800">{selectedPractice.name}</h1>
+                            <p className="text-sm text-gray-500">{selectedPractice.group}</p>
+                        </Card>
+                        
+                        <div className="flex items-start space-x-6">
+                            <nav className="w-1/4 space-y-2">
+                                <h3 className="font-semibold text-gray-600 px-2 mb-1">Categorías</h3>
+                                {selectedPractice.categories.map(cat => (
+                                    <button key={cat.id} onClick={() => handleSelectCategory(cat)} className={`w-full text-left py-2 px-3 text-sm font-medium rounded-lg truncate ${selectedCategory?.id === cat.id ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                                        {cat.name}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            <div className="flex-1 space-y-4">
+                                {selectedCategory?.subcategories.map(sub => (
+                                    <Card key={sub.id}>
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h3 className="font-semibold text-lg">{sub.name}</h3>
+                                            <button onClick={() => handleAddActivity(sub.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                                                <PlusIcon className="mr-1" /> Añadir Actividad
+                                            </button>
+                                        </div>
+                                        {sub.activities.length > 0 ? (
+                                            <ul className="divide-y divide-gray-200">
+                                                {sub.activities.map(act => (
+                                                    <li key={act.id} className="py-3">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="truncate">
+                                                                <p className="font-medium text-gray-900 truncate" title={act.name}>{act.name}</p>
+                                                                <p className="text-sm text-gray-500 truncate">{users.find(u => u.id === act.responsible)?.fullName}</p>
+                                                            </div>
+                                                            <div className="ml-4 flex-shrink-0 flex items-center space-x-4">
+                                                                <div className="text-right">
+                                                                    <SemaphoreBadge status={act.status} completionDate={act.completionDate} />
+                                                                    <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
+                                                                </div>
+                                                                <div className="flex items-center space-x-1">
+                                                                    <button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600"><PencilIcon className="w-4 h-4" /></button>
+                                                                    <button onClick={() => alert('Eliminar no implementado')} className="text-gray-400 hover:text-red-600"><TrashIcon className="w-4 h-4" /></button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-2 text-sm text-gray-600">{act.description}</div>
+                                                        {act.documents.length > 0 && (
+                                                            <div className="mt-2 flex items-center text-xs text-gray-500">
+                                                                <PaperClipIcon className="mr-1.5" /> {act.documents.length} adjuntos
+                                                            </div>
+                                                        )}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-gray-500 text-center py-4">No hay actividades en esta subcategoría.</p>
+                                        )}
+                                    </Card>
+                                ))}
+                            </div>
+                        </div>
+
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center text-gray-500">
+                            <FolderIcon className="mx-auto h-12 w-12 text-gray-400" />
+                            <h3 className="mt-2 text-sm font-semibold text-gray-900">Selecciona una práctica</h3>
+                            <p className="mt-1 text-sm text-gray-500">Elige una práctica del panel de la izquierda para ver sus detalles.</p>
+                        </div>
+                    </div>
+                )}
+            </main>
+        </div>
+    );
+};
+
+export default PracticesExplorer;

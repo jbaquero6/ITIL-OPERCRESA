@@ -1,0 +1,5 @@
+{
+  "name": "ITIL v4 Document Management System",
+  "description": "A hierarchical document management system based on the 34 ITIL v4 practices, featuring role-based access control, activity tracking with traffic-light status indicators, and an access request workflow. Designed for streamlined IT governance and compliance monitoring.",
+  "requestFramePermissions": []
+}
