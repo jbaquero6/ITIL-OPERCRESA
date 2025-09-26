@@ -1,5 +1,6 @@
 
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../hooks/useData';
 import { Practice, Category, Subcategory, Activity, Document } from '../types';
 import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon, CheckIcon, XMarkIcon } from './Icons';
@@ -7,6 +8,7 @@ import Card from './ui/Card';
 import SemaphoreBadge from './ui/Badge';
 import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
 import Modal from './ui/Modal';
+import { ITIL_PRACTICE_GROUPS } from '../constants';
 
 const ActivityForm: React.FC<{
     activity: Partial<Activity> | null;
@@ -30,13 +32,13 @@ const ActivityForm: React.FC<{
     const handleDeleteDocument = (docId: string) => {
         setFormData(prev => ({
             ...prev,
-            documents: prev?.documents?.filter(d => d.id !== docId) || []
+            documents: prev.documents?.filter(d => d.id !== docId) || []
         }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            const newFiles = Array.from(e.target.files).map(file => ({
+            const newFiles = Array.from(e.target.files).map((file: File) => ({
                 id: `doc-${Date.now()}-${Math.random()}`,
                 name: file.name,
                 url: `#mock-url/${file.name}`
@@ -44,7 +46,7 @@ const ActivityForm: React.FC<{
 
             setFormData(prev => ({
                 ...prev,
-                documents: [...(prev?.documents || []), ...newFiles]
+                documents: [...(prev.documents || []), ...newFiles]
             }));
         }
     };
@@ -125,24 +127,90 @@ const ActivityForm: React.FC<{
     );
 };
 
+const PracticeForm: React.FC<{
+    practice: Partial<Practice> | null;
+    onClose: () => void;
+    onSave: (practice: Partial<Practice>) => void;
+}> = ({ practice, onClose, onSave }) => {
+    const [formData, setFormData] = useState({ ...practice });
+    const practiceGroups = ITIL_PRACTICE_GROUPS.map(g => g.name);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({...prev, [name]: value }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (formData) onSave(formData);
+    };
+
+    if (!formData) return null;
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-4">
+             <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre de la Práctica</label>
+                <input type="text" name="name" id="name" value={formData.name || ''} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/>
+            </div>
+            <div>
+                <label htmlFor="group" className="block text-sm font-medium text-gray-700">Grupo de Práctica</label>
+                <select name="group" id="group" value={formData.group || ''} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
+                    <option value="">Seleccionar grupo...</option>
+                    {practiceGroups.map(group => <option key={group} value={group}>{group}</option>)}
+                </select>
+            </div>
+            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
+                <button type="button" onClick={onClose} className="bg-white py-2 px-4 border border-gray-300 rounded-md text-sm">Cancelar</button>
+                <button type="submit" className="bg-indigo-600 text-white py-2 px-4 border rounded-md text-sm">Guardar</button>
+            </div>
+        </form>
+    );
+};
+
 
 const PracticesExplorer: React.FC = () => {
     const { practices, setPractices, currentUser, users, roles } = useData();
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [selectedPractice, setSelectedPractice] = useState<Practice | null>(null);
-    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-    const [selectedSubcategory, setSelectedSubcategory] = useState<Subcategory | null>(null);
     
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isActivityModalOpen, setIsActivityModalOpen] = useState(false);
     const [editingActivity, setEditingActivity] = useState<Partial<Activity> | null>(null);
+    const [modalContext, setModalContext] = useState<{ categoryId: string | null; subcategoryId: string | null }>({ categoryId: null, subcategoryId: null });
     
     const [editing, setEditing] = useState<{ type: 'category' | 'subcategory' | null, id: string | null, name: string }>({ type: null, id: null, name: '' });
+    
+    const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false);
+    const [editingPractice, setEditingPractice] = useState<Partial<Practice> | null>(null);
+
+    const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+    const [expandedSubcategories, setExpandedSubcategories] = useState<Record<string, boolean>>({});
 
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
 
     const [selectedYear, setSelectedYear] = useState<number | 'all'>(currentYear);
     const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(currentMonth);
+
+    useEffect(() => {
+        if (selectedPractice) {
+            const initialCatExpanded = selectedPractice.categories.reduce((acc, cat) => {
+                acc[cat.id] = true;
+                return acc;
+            }, {} as Record<string, boolean>);
+            setExpandedCategories(initialCatExpanded);
+
+            const allSubcategories = selectedPractice.categories.flatMap(c => c.subcategories);
+            const initialSubExpanded = allSubcategories.reduce((acc, sub) => {
+                acc[sub.id] = true;
+                return acc;
+            }, {} as Record<string, boolean>);
+            setExpandedSubcategories(initialSubExpanded);
+        } else {
+            setExpandedCategories({});
+            setExpandedSubcategories({});
+        }
+    }, [selectedPractice]);
 
     const years = useMemo(() => {
         const allYears = new Set<number>([currentYear]);
@@ -176,12 +244,6 @@ const PracticesExplorer: React.FC = () => {
         return permission?.canEdit || false;
     }
 
-    const canUserEditCategory = useMemo(() => {
-        if (!selectedCategory) return false;
-        return canEdit(selectedCategory.id);
-    }, [currentUser, selectedCategory, userRole]);
-
-
     const visiblePractices = useMemo(() => {
         if (!currentUser || !userRole) return [];
         if (userRole.permissions.canViewAllCategories) return practices;
@@ -204,39 +266,36 @@ const PracticesExplorer: React.FC = () => {
 
     const handleSelectPractice = (practice: Practice) => {
         setSelectedPractice(practice);
-        setSelectedCategory(practice.categories[0] || null);
         setEditing({ type: null, id: null, name: '' });
     };
     
-    const handleSelectCategory = (category: Category) => {
-        setSelectedCategory(category);
-    }
-    
     // Activity Handlers
-    const handleAddActivity = (subcategoryId: string) => {
-        setSelectedSubcategory(selectedCategory?.subcategories.find(s => s.id === subcategoryId) || null);
+    const handleAddActivity = (subcategoryId: string, categoryId: string) => {
+        setModalContext({ categoryId, subcategoryId });
         setEditingActivity({ documents: [] });
-        setIsModalOpen(true);
+        setIsActivityModalOpen(true);
     };
     
-    const handleEditActivity = (activity: Activity, subcategoryId: string) => {
-        setSelectedSubcategory(selectedCategory?.subcategories.find(s => s.id === subcategoryId) || null);
+    const handleEditActivity = (activity: Activity, subcategoryId: string, categoryId: string) => {
+        setModalContext({ categoryId, subcategoryId });
         setEditingActivity(activity);
-        setIsModalOpen(true);
+        setIsActivityModalOpen(true);
     };
 
     const handleSaveActivity = (activityData: Partial<Activity>) => {
+        if (!modalContext.categoryId || !modalContext.subcategoryId) return;
+        
         setPractices(prevPractices => {
             return prevPractices.map(p => {
                 if (p.id !== selectedPractice?.id) return p;
                 return {
                     ...p,
                     categories: p.categories.map(c => {
-                        if (c.id !== selectedCategory?.id) return c;
+                        if (c.id !== modalContext.categoryId) return c;
                         return {
                             ...c,
                             subcategories: c.subcategories.map(sc => {
-                                if (sc.id !== selectedSubcategory?.id) return sc;
+                                if (sc.id !== modalContext.subcategoryId) return sc;
                                 
                                 const finalActivity = {
                                     ...activityData,
@@ -261,8 +320,9 @@ const PracticesExplorer: React.FC = () => {
             });
         });
 
-        setIsModalOpen(false);
+        setIsActivityModalOpen(false);
         setEditingActivity(null);
+        setModalContext({ categoryId: null, subcategoryId: null });
     };
 
     const handleDeleteActivity = (activityId: string, subcategoryId: string) => {
@@ -275,26 +335,26 @@ const PracticesExplorer: React.FC = () => {
                 if (p.id !== selectedPractice?.id) return p;
                 return {
                     ...p,
-                    categories: p.categories.map(c => {
-                        if (c.id !== selectedCategory?.id) return c;
-                        return {
-                            ...c,
-                            subcategories: c.subcategories.map(sc => {
-                                if (sc.id !== subcategoryId) return sc;
-                                return {
-                                    ...sc,
-                                    activities: sc.activities.filter(a => a.id !== activityId),
-                                };
-                            })
-                        };
-                    })
+                    categories: p.categories.map(c => ({
+                        ...c,
+                        subcategories: c.subcategories.map(sc => {
+                            if (sc.id !== subcategoryId) return sc;
+                            return {
+                                ...sc,
+                                activities: sc.activities.filter(a => a.id !== activityId),
+                            };
+                        })
+                    }))
                 };
             });
         });
     };
 
     const handleCloneActivity = (activityToClone: Activity, subcategoryId: string) => {
-        const clonedActivityData = JSON.parse(JSON.stringify(activityToClone));
+        // FIX: Add type assertion to the result of JSON.parse. The `any` type
+        // from JSON.parse can corrupt type inference for the entire state, leading to
+        // unexpected errors. Asserting the type to `Activity` solves this.
+        const clonedActivityData = JSON.parse(JSON.stringify(activityToClone)) as Activity;
 
         const newActivity: Partial<Activity> = {
             ...clonedActivityData,
@@ -314,19 +374,16 @@ const PracticesExplorer: React.FC = () => {
                 if (p.id !== selectedPractice?.id) return p;
                 return {
                     ...p,
-                    categories: p.categories.map(c => {
-                        if (c.id !== selectedCategory?.id) return c;
-                        return {
-                            ...c,
-                            subcategories: c.subcategories.map(sc => {
-                                if (sc.id !== subcategoryId) return sc;
-                                return {
-                                    ...sc,
-                                    activities: [...sc.activities, finalClonedActivity],
-                                };
-                            })
-                        };
-                    })
+                    categories: p.categories.map(c => ({
+                        ...c,
+                        subcategories: c.subcategories.map(sc => {
+                            if (sc.id !== subcategoryId) return sc;
+                            return {
+                                ...sc,
+                                activities: [...sc.activities, finalClonedActivity],
+                            };
+                        })
+                    }))
                 };
             });
         });
@@ -373,24 +430,21 @@ const PracticesExplorer: React.FC = () => {
     
     const handleDeleteCategory = (categoryId: string) => {
         if (window.confirm('¿Seguro que quieres eliminar esta categoría y todo su contenido?')) {
-            setPractices(prev => prev.map(p => ({
+            setPractices(prev => prev.map(p => p.id === selectedPractice?.id ? {
                 ...p,
                 categories: p.categories.filter(c => c.id !== categoryId)
-            })));
-            if (selectedCategory?.id === categoryId) {
-                setSelectedCategory(null);
-            }
+            } : p ));
         }
     };
 
-    const handleAddSubcategory = () => {
+    const handleAddSubcategory = (categoryId: string) => {
         const name = window.prompt('Introduce el nombre de la nueva subcategoría:');
-        if (name && selectedCategory) {
+        if (name) {
             const newSubcategory: Subcategory = { id: `subcat-${Date.now()}`, name, activities: [] };
-            setPractices(prev => prev.map(p => ({
+            setPractices(prev => prev.map(p => p.id === selectedPractice?.id ? {
                 ...p,
-                categories: p.categories.map(c => c.id === selectedCategory.id ? { ...c, subcategories: [...c.subcategories, newSubcategory] } : c)
-            })));
+                categories: p.categories.map(c => c.id === categoryId ? { ...c, subcategories: [...c.subcategories, newSubcategory] } : c)
+            } : p));
         }
     };
 
@@ -406,37 +460,87 @@ const PracticesExplorer: React.FC = () => {
         }
     };
 
-    const filteredSubcategories = useMemo(() => {
-        if (!selectedCategory) return [];
+    // Practice Handlers
+    const handleAddPractice = () => {
+        setEditingPractice({
+            name: '',
+            group: ITIL_PRACTICE_GROUPS[0].name,
+            categories: [],
+        });
+        setIsPracticeModalOpen(true);
+    };
 
-        return selectedCategory.subcategories.map(sub => ({
-            ...sub,
-            activities: sub.activities.filter(activity => {
-                if (!activity.dueDate) return false; 
-                const activityDate = new Date(activity.dueDate);
+    const handleEditPractice = (practice: Practice) => {
+        setEditingPractice(practice);
+        setIsPracticeModalOpen(true);
+    };
 
-                const yearMatch = selectedYear === 'all' || activityDate.getFullYear() === selectedYear;
-                const monthMatch = selectedMonth === 'all' || activityDate.getMonth() === selectedMonth;
+    const handleSavePractice = (practiceData: Partial<Practice>) => {
+        setPractices(prevPractices => {
+            if (practiceData.id) { // Editing
+                return prevPractices.map(p => p.id === practiceData.id ? { ...p, ...practiceData } as Practice : p);
+            } else { // Adding
+                const newPractice: Practice = {
+                    id: `p-${Date.now()}`,
+                    name: practiceData.name || 'Nueva Práctica',
+                    group: practiceData.group || ITIL_PRACTICE_GROUPS[0].name,
+                    categories: [],
+                };
+                return [...prevPractices, newPractice];
+            }
+        });
+        setIsPracticeModalOpen(false);
+        setEditingPractice(null);
+    };
 
-                return yearMatch && monthMatch;
-            })
+    const handleDeletePractice = (practiceId: string) => {
+        if (window.confirm('¿Está seguro de que desea eliminar esta práctica y todo su contenido? Esta acción no se puede deshacer.')) {
+            setPractices(prevPractices => prevPractices.filter(p => p.id !== practiceId));
+            if (selectedPractice?.id === practiceId) {
+                setSelectedPractice(null);
+            }
+        }
+    };
+
+    const toggleCategory = (categoryId: string) => {
+        setExpandedCategories(prev => ({ ...prev, [categoryId]: !prev[categoryId] }));
+    };
+
+    const toggleSubcategory = (subcategoryId: string) => {
+        setExpandedSubcategories(prev => ({
+            ...prev,
+            [subcategoryId]: !prev[subcategoryId]
         }));
-    }, [selectedCategory, selectedYear, selectedMonth]);
+    };
 
     return (
         <div className="flex h-full space-x-6">
-            <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingActivity?.id ? 'Editar Actividad' : 'Nueva Actividad'}>
+            <Modal isOpen={isActivityModalOpen} onClose={() => setIsActivityModalOpen(false)} title={editingActivity?.id ? 'Editar Actividad' : 'Nueva Actividad'}>
                 <ActivityForm 
                     activity={editingActivity} 
-                    onClose={() => setIsModalOpen(false)}
+                    onClose={() => setIsActivityModalOpen(false)}
                     onSave={handleSaveActivity}
+                />
+            </Modal>
+             <Modal isOpen={isPracticeModalOpen} onClose={() => setIsPracticeModalOpen(false)} title={editingPractice?.id ? 'Editar Práctica' : 'Nueva Práctica'}>
+                <PracticeForm 
+                    practice={editingPractice}
+                    onClose={() => setIsPracticeModalOpen(false)}
+                    onSave={handleSavePractice}
                 />
             </Modal>
             
             <aside className="w-1/3 max-w-sm flex-shrink-0">
-                <Card className="h-full overflow-y-auto">
-                    <h2 className="text-xl font-bold mb-4">Prácticas ITIL</h2>
-                    <div className="space-y-1">
+                 <Card className="h-full flex flex-col">
+                    <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                        <h2 className="text-xl font-bold">Prácticas ITIL</h2>
+                        {userRole?.permissions.canViewAllCategories && (
+                            <button onClick={handleAddPractice} className="p-1.5 text-indigo-600 bg-indigo-100 rounded-md hover:bg-indigo-200" title="Añadir nueva práctica">
+                                <PlusIcon className="w-5 h-5" />
+                            </button>
+                        )}
+                    </div>
+                    <div className="space-y-1 overflow-y-auto">
                         {Object.entries(practicesByGroup).map(([groupName, practicesInGroup]) => (
                             <div key={groupName}>
                                 <button onClick={() => setExpandedGroups(p => ({...p, [groupName]: !p[groupName]}))} className="w-full flex justify-between items-center text-left py-2 px-2 rounded-md hover:bg-gray-100">
@@ -446,10 +550,16 @@ const PracticesExplorer: React.FC = () => {
                                 {expandedGroups[groupName] && (
                                     <div className="pl-4 py-1 space-y-1">
                                         {practicesInGroup.map(practice => (
-                                            <div key={practice.id}>
-                                                <button onClick={() => handleSelectPractice(practice)} className={`w-full text-left py-1.5 px-2 text-sm rounded truncate ${selectedPractice?.id === practice.id ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-50'}`}>
+                                            <div key={practice.id} className="group flex items-center justify-between rounded-md hover:bg-gray-50">
+                                                <button onClick={() => handleSelectPractice(practice)} className={`flex-grow text-left py-1.5 px-2 text-sm rounded-l-md truncate ${selectedPractice?.id === practice.id ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600'}`}>
                                                     {practice.name}
                                                 </button>
+                                                {userRole?.permissions.canViewAllCategories && (
+                                                    <div className="opacity-0 group-hover:opacity-100 flex items-center pr-2 space-x-1 flex-shrink-0">
+                                                        <button onClick={() => handleEditPractice(practice)} className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200" title="Editar Práctica"><PencilIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => handleDeletePractice(practice.id)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-200" title="Eliminar Práctica"><TrashIcon className="w-4 h-4" /></button>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -501,107 +611,134 @@ const PracticesExplorer: React.FC = () => {
                             </div>
                         </Card>
                         
-                        <div className="flex items-start space-x-6">
-                            <nav className="w-1/4 space-y-1">
-                                <h3 className="font-semibold text-gray-600 px-2 mb-1">Categorías</h3>
-                                {selectedPractice.categories.map(cat => (
-                                     <div key={cat.id} className={`group flex items-center justify-between rounded-lg ${selectedCategory?.id === cat.id ? 'bg-indigo-50' : ''}`}>
-                                        {editing.type === 'category' && editing.id === cat.id ? (
-                                             <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex-1 flex items-center p-1 space-x-1">
-                                                <input type="text" value={editing.name} onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} autoFocus className="w-full text-sm px-2 py-1 border border-indigo-300 rounded-md" />
-                                                <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-4 h-4" /></button>
-                                                <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-4 h-4" /></button>
+                        <div className="space-y-4">
+                             {userRole?.permissions.canViewAllCategories && (
+                                <div className="flex justify-end">
+                                    <button onClick={handleAddCategory} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                                        <PlusIcon className="mr-1" /> Añadir Categoría
+                                    </button>
+                                </div>
+                            )}
+
+                            {selectedPractice.categories.map(cat => {
+                                const isCatExpanded = expandedCategories[cat.id];
+                                const canUserEditThisCategory = canEdit(cat.id);
+                                const filteredSubcategories: Subcategory[] = cat.subcategories.map(sub => ({
+                                    ...sub,
+                                    activities: sub.activities.filter(activity => {
+                                        if (!activity.dueDate) return false; 
+                                        const activityDate = new Date(activity.dueDate);
+                                        const yearMatch = selectedYear === 'all' || activityDate.getFullYear() === selectedYear;
+                                        const monthMatch = selectedMonth === 'all' || activityDate.getMonth() === selectedMonth;
+                                        return yearMatch && monthMatch;
+                                    })
+                                }));
+
+                                return (
+                                <Card key={cat.id}>
+                                    <div className="flex justify-between items-center group">
+                                         {editing.type === 'category' && editing.id === cat.id ? (
+                                            <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex-1 flex items-center space-x-2">
+                                                <input type="text" value={editing.name} onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} autoFocus className="w-full text-xl font-bold px-2 py-1 border border-indigo-300 rounded-md" />
+                                                <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-5 h-5" /></button>
+                                                <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-5 h-5" /></button>
                                             </form>
                                         ) : (
-                                            <>
-                                                <button onClick={() => handleSelectCategory(cat)} className={`w-full text-left py-2 px-3 text-sm font-medium rounded-lg truncate ${selectedCategory?.id === cat.id ? 'text-indigo-700' : 'text-gray-600 hover:bg-gray-100'}`}>
-                                                    {cat.name}
+                                            <div className="flex items-center flex-1 truncate">
+                                                <button onClick={() => toggleCategory(cat.id)} className="flex items-center text-left p-1 -ml-1 rounded-md hover:bg-gray-100 flex-shrink-0" aria-expanded={isCatExpanded}>
+                                                    {isCatExpanded ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                                    <span className="sr-only">{isCatExpanded ? 'Colapsar' : 'Expandir'}</span>
                                                 </button>
-                                                {canEdit(cat.id) && (
-                                                     <div className="opacity-0 group-hover:opacity-100 flex items-center pr-2 space-x-1">
+                                                <h2 className="font-bold text-xl ml-2 truncate" title={cat.name}>{cat.name}</h2>
+                                                {canUserEditThisCategory && (
+                                                    <div className="opacity-0 group-hover:opacity-100 flex items-center ml-2 space-x-1 flex-shrink-0">
                                                         <button onClick={() => handleStartEdit('category', cat.id, cat.name)} className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200" title="Editar"><PencilIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => handleDeleteCategory(cat.id)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-200" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
                                                     </div>
                                                 )}
-                                            </>
+                                            </div>
                                         )}
-                                     </div>
-                                ))}
-                                {userRole?.permissions.canViewAllCategories && (
-                                     <button onClick={handleAddCategory} className="w-full mt-2 text-sm text-indigo-600 hover:bg-indigo-50 rounded-md py-2 flex items-center justify-center">
-                                        <PlusIcon className="w-4 h-4 mr-1" /> Añadir Categoría
-                                    </button>
-                                )}
-                            </nav>
-
-                            <div className="flex-1 space-y-4">
-                                {selectedCategory && canUserEditCategory && (
-                                    <div className="flex justify-end">
-                                        <button onClick={handleAddSubcategory} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                                            <PlusIcon className="mr-1" /> Añadir Subcategoría
-                                        </button>
+                                        {canUserEditThisCategory && editing.id !== cat.id && (
+                                             <button onClick={() => handleAddSubcategory(cat.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 ml-4 flex-shrink-0">
+                                                <PlusIcon className="mr-1" /> Añadir Subcategoría
+                                            </button>
+                                        )}
                                     </div>
-                                )}
-                                {filteredSubcategories.map(sub => (
-                                    <Card key={sub.id}>
-                                        <div className="flex justify-between items-center mb-3 group">
-                                            {editing.type === 'subcategory' && editing.id === sub.id ? (
-                                                <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex-1 flex items-center space-x-2">
-                                                    <input type="text" value={editing.name} onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} autoFocus className="w-full text-lg font-semibold px-2 py-1 border border-indigo-300 rounded-md" />
-                                                    <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-5 h-5" /></button>
-                                                    <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-5 h-5" /></button>
-                                                </form>
-                                            ) : (
-                                                 <div className="flex items-center">
-                                                    <h3 className="font-semibold text-lg">{sub.name}</h3>
-                                                    {canUserEditCategory && (
-                                                        <div className="opacity-0 group-hover:opacity-100 flex items-center ml-2 space-x-1">
-                                                            <button onClick={() => handleStartEdit('subcategory', sub.id, sub.name)} className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200" title="Editar"><PencilIcon className="w-4 h-4" /></button>
-                                                            <button onClick={() => handleDeleteSubcategory(sub.id)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-200" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
-                                                        </div>
+                                    {isCatExpanded && (
+                                        <div className="pl-6 mt-2 border-l border-gray-200 ml-2 space-y-4">
+                                            {filteredSubcategories.map(sub => {
+                                                const isSubExpanded = expandedSubcategories[sub.id];
+                                                return (
+                                                <div key={sub.id} className="pt-4">
+                                                    <div className="flex justify-between items-center group">
+                                                        {editing.type === 'subcategory' && editing.id === sub.id ? (
+                                                            <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex-1 flex items-center space-x-2">
+                                                                <input type="text" value={editing.name} onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} autoFocus className="w-full text-lg font-semibold px-2 py-1 border border-indigo-300 rounded-md" />
+                                                                <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-5 h-5" /></button>
+                                                                <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-5 h-5" /></button>
+                                                            </form>
+                                                        ) : (
+                                                            <div className="flex items-center flex-1 truncate">
+                                                                <button onClick={() => toggleSubcategory(sub.id)} className="flex items-center text-left p-1 -ml-1 rounded-md hover:bg-gray-100 flex-shrink-0" aria-expanded={isSubExpanded}>
+                                                                    {isSubExpanded ? <ChevronDownIcon className="w-5 h-5 text-gray-500" /> : <ChevronRightIcon className="w-5 h-5 text-gray-500" />}
+                                                                </button>
+                                                                <h3 className="font-semibold text-lg ml-2 truncate" title={sub.name}>{sub.name}</h3>
+                                                                {canUserEditThisCategory && (
+                                                                    <div className="opacity-0 group-hover:opacity-100 flex items-center ml-2 space-x-1 flex-shrink-0">
+                                                                        <button onClick={() => handleStartEdit('subcategory', sub.id, sub.name)} className="text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200" title="Editar"><PencilIcon className="w-4 h-4" /></button>
+                                                                        <button onClick={() => handleDeleteSubcategory(sub.id)} className="text-gray-400 hover:text-red-600 p-1 rounded-full hover:bg-gray-200" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {canUserEditThisCategory && editing.id !== sub.id && (
+                                                            <button onClick={() => handleAddActivity(sub.id, cat.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 ml-4 flex-shrink-0">
+                                                                <PlusIcon className="mr-1" /> Añadir Actividad
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                    {isSubExpanded && (
+                                                    <div className="mt-3 pl-8">
+                                                        {sub.activities.length > 0 ? (
+                                                            <ul className="divide-y divide-gray-200">
+                                                                {sub.activities.map(act => (
+                                                                    <li key={act.id} className="py-3">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <div className="truncate">
+                                                                                <p className="font-medium text-gray-900 truncate" title={act.name}>{act.name}</p>
+                                                                                <p className="text-sm text-gray-500 truncate">{users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}</p>
+                                                                            </div>
+                                                                            <div className="ml-4 flex-shrink-0 flex items-center space-x-4">
+                                                                                <div className="text-right">
+                                                                                    <SemaphoreBadge status={act.status} completionDate={act.completionDate} />
+                                                                                    <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
+                                                                                </div>
+                                                                                <div className="flex items-center space-x-1">
+                                                                                    {canUserEditThisCategory && (<button onClick={() => handleEditActivity(act, sub.id, cat.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>)}
+                                                                                    {userRole?.permissions.canCloneActivity && (<button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>)}
+                                                                                    {userRole?.permissions.canDeleteActivity && (<button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>)}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="mt-2 text-sm text-gray-600">{act.description}</div>
+                                                                        {act.documents.length > 0 && ( <div className="mt-2 flex items-center text-xs text-gray-500"><PaperClipIcon className="mr-1.5" /> {act.documents.length} adjuntos</div> )}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
+                                                        ) : (
+                                                            <p className="text-sm text-gray-500 text-center py-4">No hay actividades para el período seleccionado.</p>
+                                                        )}
+                                                    </div>
                                                     )}
                                                 </div>
-                                            )}
-                                            {canUserEditCategory && editing.id !== sub.id && (
-                                                <button onClick={() => handleAddActivity(sub.id)} className="flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                                                    <PlusIcon className="mr-1" /> Añadir Actividad
-                                                </button>
-                                            )}
+                                                )
+                                            })}
                                         </div>
-                                        {sub.activities.length > 0 ? (
-                                            <ul className="divide-y divide-gray-200">
-                                                {sub.activities.map(act => (
-                                                    <li key={act.id} className="py-3">
-                                                        <div className="flex items-center justify-between">
-                                                            <div className="truncate">
-                                                                <p className="font-medium text-gray-900 truncate" title={act.name}>{act.name}</p>
-                                                                <p className="text-sm text-gray-500 truncate">{users.find(u => u.id === act.responsible)?.fullName}</p>
-                                                            </div>
-                                                            <div className="ml-4 flex-shrink-0 flex items-center space-x-4">
-                                                                <div className="text-right">
-                                                                    <SemaphoreBadge status={act.status} completionDate={act.completionDate} />
-                                                                    <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
-                                                                </div>
-                                                                <div className="flex items-center space-x-1">
-                                                                    {canUserEditCategory && (<button onClick={() => handleEditActivity(act, sub.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>)}
-                                                                    {userRole?.permissions.canCloneActivity && (<button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>)}
-                                                                    {userRole?.permissions.canDeleteActivity && (<button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>)}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="mt-2 text-sm text-gray-600">{act.description}</div>
-                                                        {act.documents.length > 0 && ( <div className="mt-2 flex items-center text-xs text-gray-500"><PaperClipIcon className="mr-1.5" /> {act.documents.length} adjuntos</div> )}
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : (
-                                            <p className="text-sm text-gray-500 text-center py-4">No hay actividades para el período seleccionado.</p>
-                                        )}
-                                    </Card>
-                                ))}
-                            </div>
+                                    )}
+                                </Card>
+                                )
+                            })}
                         </div>
-
                     </div>
                 ) : (
                     <div className="flex items-center justify-center h-full">

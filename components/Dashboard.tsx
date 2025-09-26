@@ -4,6 +4,7 @@ import { Activity, SemaphoreStatus, Practice } from '../types';
 import Card from './ui/Card';
 import { formatDate } from '../utils/helpers';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
+import { ChevronDownIcon, ChevronRightIcon } from './Icons';
 
 interface PracticeStats {
     id: string;
@@ -14,6 +15,7 @@ interface PracticeStats {
     percentages: Record<SemaphoreStatus, number>;
 }
 
+type EnhancedActivity = Activity & { categoryName: string; subcategoryName: string; };
 
 const Dashboard: React.FC = () => {
     const { practices, currentUser, users, roles } = useData();
@@ -23,6 +25,9 @@ const Dashboard: React.FC = () => {
 
     const [selectedYear, setSelectedYear] = useState<number | 'all'>(currentYear);
     const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(currentMonth);
+    const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
+        ITIL_PRACTICE_GROUPS.reduce((acc, group) => ({ ...acc, [group.name]: true }), {})
+    );
 
      const userRole = useMemo(() => {
         return currentUser ? roles.find(r => r.id === currentUser.roleId) : null;
@@ -128,36 +133,49 @@ const Dashboard: React.FC = () => {
     }, [filteredPracticeStats]);
 
     const upcomingDeadlines = useMemo(() => {
-        const allActivities = visiblePractices.flatMap(p => p.categories.flatMap(c => c.subcategories.flatMap(sc => sc.activities)));
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        
         const deadlines = {
-            in7days: [] as Activity[],
-            in14days: [] as Activity[],
-            in30days: [] as Activity[],
+            in7days: [] as EnhancedActivity[],
+            in15days: [] as EnhancedActivity[],
+            in30days: [] as EnhancedActivity[],
         };
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
         const in7 = new Date(today);
         in7.setDate(today.getDate() + 7);
-        const in14 = new Date(today);
-        in14.setDate(today.getDate() + 14);
+        const in15 = new Date(today);
+        in15.setDate(today.getDate() + 15);
         const in30 = new Date(today);
         in30.setDate(today.getDate() + 30);
 
-        for (const activity of allActivities) {
-            if (activity.dueDate && !activity.completionDate) {
-                const dueDate = new Date(activity.dueDate);
-                 dueDate.setHours(0,0,0,0);
-                if (dueDate >= today && dueDate <= in7) {
-                    deadlines.in7days.push(activity);
-                } else if (dueDate > in7 && dueDate <= in14) {
-                    deadlines.in14days.push(activity);
-                } else if (dueDate > in14 && dueDate <= in30) {
-                    deadlines.in30days.push(activity);
-                }
-            }
-        }
+        visiblePractices.forEach(practice => {
+            practice.categories.forEach(category => {
+                category.subcategories.forEach(subcategory => {
+                    subcategory.activities.forEach(activity => {
+                        if (activity.dueDate && !activity.completionDate) {
+                            const dueDate = new Date(activity.dueDate);
+                            dueDate.setHours(0, 0, 0, 0);
+
+                            const enhancedActivity: EnhancedActivity = {
+                                ...activity,
+                                categoryName: category.name,
+                                subcategoryName: subcategory.name,
+                            };
+
+                            if (dueDate >= today && dueDate <= in7) {
+                                deadlines.in7days.push(enhancedActivity);
+                            } else if (dueDate > in7 && dueDate <= in15) {
+                                deadlines.in15days.push(enhancedActivity);
+                            } else if (dueDate > in15 && dueDate <= in30) {
+                                deadlines.in30days.push(enhancedActivity);
+                            }
+                        }
+                    });
+                });
+            });
+        });
+
         return deadlines;
     }, [visiblePractices]);
 
@@ -173,6 +191,31 @@ const Dashboard: React.FC = () => {
         }
     }, [selectedYear, selectedMonth, months]);
 
+    const renderDeadlineList = (activities: EnhancedActivity[]) => {
+        if (activities.length === 0) {
+            return <p className="text-sm text-gray-500">Ninguna</p>;
+        }
+        return (
+            <ul className="divide-y divide-gray-100">
+                {activities.map(act => (
+                    <li key={act.id} className="py-3">
+                        <div className="flex justify-between items-start">
+                             <div className="flex-1 overflow-hidden">
+                                <p className="text-sm font-medium text-gray-800 truncate" title={act.name}>{act.name}</p>
+                                <p className="text-xs text-gray-500 truncate" title={`${act.categoryName} / ${act.subcategoryName}`}>
+                                    {act.categoryName} / {act.subcategoryName}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1 truncate">
+                                    <span className="font-semibold">Resp:</span> {users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}
+                                </p>
+                            </div>
+                            <span className="text-sm font-medium text-gray-600 flex-shrink-0 ml-2">{formatDate(act.dueDate)}</span>
+                        </div>
+                    </li>
+                ))}
+            </ul>
+        );
+    };
 
     return (
         <div className="space-y-6">
@@ -234,42 +277,57 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="space-y-8">
+            <div className="space-y-2">
                  {ITIL_PRACTICE_GROUPS.map(group => {
                     const practicesInGroup = filteredPracticeStats.filter(p => p.group === group.name && p.totalActivities > 0);
-                    
-                    if (practicesInGroup.length === 0) {
+                    const isExpanded = expandedGroups[group.name];
+
+                    if (practicesInGroup.length === 0 && !Object.values(expandedGroups).some(v => v)) {
                         return null;
                     }
 
                     return (
-                        <div key={group.name}>
-                            <h2 className="text-xl font-semibold mb-4 text-gray-700 pb-2 border-b">{group.name}</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {practicesInGroup.map(practice => (
-                                    <Card key={practice.id}>
-                                        <h3 className="font-semibold text-lg truncate" title={practice.name}>{practice.name}</h3>
-                                        <p className="text-sm text-gray-500 mb-4">
-                                            {practice.totalActivities} actividades {periodText}
-                                        </p>
-                                        <>
-                                            <div className="w-full bg-gray-200 rounded-full h-2.5 my-2 flex">
-                                                <div className="bg-green-500 h-2.5 rounded-l-full" style={{ width: `${practice.percentages[SemaphoreStatus.GREEN]}%` }}></div>
-                                                <div className="bg-orange-500 h-2.5" style={{ width: `${practice.percentages[SemaphoreStatus.ORANGE]}%` }}></div>
-                                                <div className="bg-red-500 h-2.5" style={{ width: `${practice.percentages[SemaphoreStatus.RED]}%` }}></div>
-                                                <div className="bg-gray-400 h-2.5 rounded-r-full" style={{ width: `${practice.percentages[SemaphoreStatus.GRAY]}%` }}></div>
-                                            </div>
-                                            <div className="flex flex-col space-y-1 text-sm mt-3">
-                                                <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>Completado a tiempo: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GREEN] || 0}</span></div>
-                                                <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>Por iniciar: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.ORANGE] || 0}</span></div>
-                                                <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Atrasado/Vencido: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.RED] || 0}</span></div>
-                                                <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>No iniciado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GRAY] || 0}</span></div>
-                                            </div>
-                                        </>
-                                    </Card>
-                                ))}
-                            </div>
-                        </div>
+                        <Card key={group.name}>
+                            <button
+                                onClick={() => setExpandedGroups(prev => ({ ...prev, [group.name]: !prev[group.name] }))}
+                                className="w-full flex justify-between items-center text-left py-2"
+                                aria-expanded={isExpanded}
+                            >
+                                <h2 className="text-xl font-semibold text-gray-700">{group.name}</h2>
+                                {isExpanded ? <ChevronDownIcon className="w-6 h-6 text-gray-500" /> : <ChevronRightIcon className="w-6 h-6 text-gray-500" />}
+                            </button>
+                            
+                            {isExpanded && (
+                                <div className="mt-4 border-t pt-6">
+                                    {practicesInGroup.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {practicesInGroup.map(practice => (
+                                                <Card key={practice.id} className="!p-4 !shadow-md">
+                                                    <h3 className="font-semibold text-base truncate" title={practice.name}>{practice.name}</h3>
+                                                    <p className="text-xs text-gray-500 mb-3">
+                                                        {practice.totalActivities} actividades {periodText}
+                                                    </p>
+                                                    <div className="w-full bg-gray-200 rounded-full h-2 my-2 flex">
+                                                        <div className="bg-green-500 h-2 rounded-l-full" style={{ width: `${practice.percentages[SemaphoreStatus.GREEN]}%` }}></div>
+                                                        <div className="bg-orange-500 h-2" style={{ width: `${practice.percentages[SemaphoreStatus.ORANGE]}%` }}></div>
+                                                        <div className="bg-red-500 h-2" style={{ width: `${practice.percentages[SemaphoreStatus.RED]}%` }}></div>
+                                                        <div className="bg-gray-400 h-2 rounded-r-full" style={{ width: `${practice.percentages[SemaphoreStatus.GRAY]}%` }}></div>
+                                                    </div>
+                                                    <div className="flex flex-col space-y-1 text-xs mt-2">
+                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>A tiempo: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GREEN] || 0}</span></div>
+                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>Por iniciar: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.ORANGE] || 0}</span></div>
+                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Vencido: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.RED] || 0}</span></div>
+                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>No iniciado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GRAY] || 0}</span></div>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-gray-500 text-center py-8">No hay datos de prácticas para mostrar en este período.</p>
+                                    )}
+                                </div>
+                            )}
+                        </Card>
                     );
                 })}
             </div>
@@ -279,63 +337,15 @@ const Dashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div>
                         <h3 className="font-semibold text-gray-700 border-b pb-2 mb-2">En 7 días</h3>
-                        {upcomingDeadlines.in7days.length > 0 ? (
-                            <ul className="divide-y divide-gray-100">
-                                {upcomingDeadlines.in7days.map(act => (
-                                    <li key={act.id} className="py-2 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-800 truncate" title={act.name}>
-                                                {act.name}
-                                            </p>
-                                            <p className="text-xs text-gray-500 truncate">
-                                                {users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}
-                                            </p>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-600 flex-shrink-0">{formatDate(act.dueDate)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (<p className="text-sm text-gray-500">Ninguna</p>)}
+                        {renderDeadlineList(upcomingDeadlines.in7days)}
                     </div>
                     <div>
-                        <h3 className="font-semibold text-gray-700 border-b pb-2 mb-2">En 14 días</h3>
-                        {upcomingDeadlines.in14days.length > 0 ? (
-                             <ul className="divide-y divide-gray-100">
-                                {upcomingDeadlines.in14days.map(act => (
-                                     <li key={act.id} className="py-2 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-800 truncate" title={act.name}>
-                                                {act.name}
-                                            </p>
-                                            <p className="text-xs text-gray-500 truncate">
-                                                {users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}
-                                            </p>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-600 flex-shrink-0">{formatDate(act.dueDate)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (<p className="text-sm text-gray-500">Ninguna</p>)}
+                        <h3 className="font-semibold text-gray-700 border-b pb-2 mb-2">En 15 días</h3>
+                        {renderDeadlineList(upcomingDeadlines.in15days)}
                     </div>
                     <div>
                         <h3 className="font-semibold text-gray-700 border-b pb-2 mb-2">En 30 días</h3>
-                        {upcomingDeadlines.in30days.length > 0 ? (
-                             <ul className="divide-y divide-gray-100">
-                                {upcomingDeadlines.in30days.map(act => (
-                                     <li key={act.id} className="py-2 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-sm font-medium text-gray-800 truncate" title={act.name}>
-                                                {act.name}
-                                            </p>
-                                            <p className="text-xs text-gray-500 truncate">
-                                                {users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}
-                                            </p>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-600 flex-shrink-0">{formatDate(act.dueDate)}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        ) : (<p className="text-sm text-gray-500">Ninguna</p>)}
+                        {renderDeadlineList(upcomingDeadlines.in30days)}
                     </div>
                 </div>
             </Card>
