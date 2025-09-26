@@ -16,6 +16,7 @@ const emptyPermissions: RolePermissions = {
     canManageUsers: false,
     canManageRoles: false,
     canManageAuthSettings: false,
+    canManageSharePointSettings: false,
     canDeleteActivity: false,
     canCloneActivity: false,
 };
@@ -30,6 +31,7 @@ const permissionLabels: Record<keyof RolePermissions, string> = {
     canManageUsers: "Gestionar Usuarios (Crear/Editar/Eliminar)",
     canManageRoles: "Gestionar Roles (Crear/Editar/Eliminar)",
     canManageAuthSettings: "Gestionar Config. de Autenticación",
+    canManageSharePointSettings: "Gestionar Config. de SharePoint",
     canDeleteActivity: "Eliminar Actividades",
     canCloneActivity: "Clonar Actividades",
 };

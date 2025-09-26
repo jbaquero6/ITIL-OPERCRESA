@@ -1,5 +1,5 @@
 // FIX: Import AccessRequest and AccessRequestStatus.
-import { Practice, User, SemaphoreStatus, LdapConfig, Activity, AuthType, AccessRequest, AccessRequestStatus, Role } from '../types';
+import { Practice, User, SemaphoreStatus, ActivityStatus, LdapConfig, Activity, AuthType, AccessRequest, AccessRequestStatus, Role, SharePointConfig } from '../types';
 import { calculateSemaphoreStatus } from '../utils/helpers';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
 
@@ -37,6 +37,7 @@ export const mockRoles: Role[] = [
             canManageUsers: true,
             canManageRoles: true,
             canManageAuthSettings: true,
+            canManageSharePointSettings: true,
             canDeleteActivity: true,
             canCloneActivity: true,
         }
@@ -56,6 +57,7 @@ export const mockRoles: Role[] = [
             canManageUsers: false,
             canManageRoles: false,
             canManageAuthSettings: false,
+            canManageSharePointSettings: false,
             canDeleteActivity: false,
             canCloneActivity: false,
         }
@@ -66,8 +68,8 @@ export const mockRoles: Role[] = [
 // Mock users
 export const mockUsers: User[] = [
     { id: 'u1', username: 'admin', fullName: 'Administrador del Sistema', email: 'admin@example.com', roleId: 'role-admin', authType: AuthType.LOCAL, password: 'admin', permissions: [] },
-    { id: 'u2', username: 'jdoe', fullName: 'John Doe', email: 'jdoe@example.com', roleId: 'role-user', authType: AuthType.LDAP, permissions: [{ categoryId: 'p0-0-0', canEdit: true }, { categoryId: 'p1-0-0', canEdit: false }] },
-    { id: 'u3', username: 'msmith', fullName: 'Mary Smith', email: 'msmith@example.com', roleId: 'role-user', authType: AuthType.LOCAL, password: 'password123', permissions: [{ categoryId: 'p2-0-0', canEdit: true }] },
+    { id: 'u2', username: 'jdoe', fullName: 'John Doe', email: 'jdoe@example.com', roleId: 'role-user', authType: AuthType.LDAP, permissions: [{ categoryId: 'p0-0-0', canEdit: false }, { categoryId: 'p1-0-0', canEdit: false }] },
+    { id: 'u3', username: 'msmith', fullName: 'Mary Smith', email: 'msmith@example.com', roleId: 'role-user', authType: AuthType.LOCAL, password: 'password123', permissions: [{ categoryId: 'p2-0-0', canEdit: false }] },
 ];
 
 // Helper to generate activities
@@ -85,6 +87,8 @@ const generateActivities = (count: number, subcategoryId: string): Activity[] =>
         
         const randomTask = exampleItilTasks[Math.floor(Math.random() * exampleItilTasks.length)];
         
+        const progress = completionDate ? 100 : Math.floor(Math.random() * 100);
+        
         const activityData = {
             id: `a-${subcategoryId}-${i}`,
             name: randomTask.name,
@@ -92,13 +96,14 @@ const generateActivities = (count: number, subcategoryId: string): Activity[] =>
             responsible: mockUsers[1 + (i % 2)].id,
             dueDate: dueDate.toISOString().split('T')[0],
             completionDate: completionDate ? completionDate.toISOString().split('T')[0] : null,
-            progress: completionDate ? 100 : Math.floor(Math.random() * 101),
+            progress: progress,
+            activityStatus: progress === 100 ? ActivityStatus.CLOSED : ActivityStatus.OPEN,
             documents: [],
         };
 
         activities.push({
             ...activityData,
-            status: calculateSemaphoreStatus(activityData),
+            semaphoreStatus: calculateSemaphoreStatus(activityData),
         });
     }
     return activities;
@@ -112,14 +117,17 @@ export const mockPractices: Practice[] = ITIL_PRACTICE_GROUPS.flatMap((group, gr
         group: group.name,
         categories: Array.from({ length: Math.floor(Math.random() * 2) + 1 }, (_, catIndex) => {
             const catId = `p${groupIndex}-${practiceIndex}-${catIndex}`;
+            const categoryName = `Categoría ${catIndex + 1}`;
             return {
                 id: catId,
-                name: `Categoría ${catIndex + 1}`,
+                name: categoryName,
                 subcategories: Array.from({ length: Math.floor(Math.random() * 3) + 1 }, (_, subcatIndex) => {
                     const subcatId = `sc-${catId}-${subcatIndex}`;
+                    const subCategoryName = `Subcategoría ${subcatIndex + 1}`;
                     return {
                         id: subcatId,
-                        name: `Subcategoría ${subcatIndex + 1}`,
+                        name: subCategoryName,
+                        sharepointFolderPath: `Evidencias/${practiceName.replace(/\s+/g, '_')}/${categoryName.replace(/\s+/g, '_')}/${subCategoryName.replace(/\s+/g, '_')}`,
                         activities: generateActivities(Math.floor(Math.random() * 5) + 1, subcatId),
                     };
                 }),
@@ -140,6 +148,13 @@ export const mockLdapConfig: LdapConfig = {
     fullNameAttribute: 'cn',
     emailAttribute: 'mail',
 };
+
+export const mockSharePointConfig: SharePointConfig = {
+    enabled: true,
+    siteUrl: 'https://operti.sharepoint.com/sites/ITIL',
+    maxFileNameLength: 128,
+};
+
 
 // FIX: Add mock data for access requests.
 export const mockAccessRequests: AccessRequest[] = [

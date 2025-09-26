@@ -1,15 +1,15 @@
-
 import React, { useState, FC } from 'react';
 import { DataContext, useData } from './hooks/useData';
-import { mockPractices, mockUsers, mockLdapConfig, mockRoles } from './data/mockData';
-import { Practice, User, LdapConfig, Role } from './types';
+import { mockPractices, mockUsers, mockLdapConfig, mockRoles, mockSharePointConfig } from './data/mockData';
+import { Practice, User, LdapConfig, Role, SharePointConfig } from './types';
 import Dashboard from './components/Dashboard';
 import PracticesExplorer from './components/PracticesExplorer';
 import Users from './components/Users';
 import Authentication from './components/Authentication';
 import Login from './components/Login';
 import RoleManagement from './components/RoleManagement';
-import { HomeIcon, FolderIcon, UsersIcon, KeyIcon, ArrowLeftOnRectangleIcon, UserCircleIcon, ShieldCheckIcon } from './components/Icons';
+import SharePoint from './components/SharePoint';
+import { HomeIcon, FolderIcon, UsersIcon, KeyIcon, ArrowLeftOnRectangleIcon, UserCircleIcon, ShieldCheckIcon, CloudArrowUpIcon } from './components/Icons';
 
 const NavItem: FC<{ id: string; label: string; icon: React.FC<{className?: string}>; activeView: string; setActiveView: (view: string) => void }> = ({ id, label, icon: IconComponent, activeView, setActiveView }) => {
     const isActive = activeView === id;
@@ -45,6 +45,9 @@ const Sidebar: FC<{ activeView: string; setActiveView: (view: string) => void; h
     }
     if (userRole?.permissions.canViewAuthSettings) {
         adminNavItems.push({ id: 'authentication', label: 'Autenticación', icon: KeyIcon });
+    }
+    if (userRole?.permissions.canManageSharePointSettings) {
+        adminNavItems.push({ id: 'sharepoint', label: 'SharePoint', icon: CloudArrowUpIcon });
     }
 
 
@@ -93,6 +96,7 @@ const App: React.FC = () => {
     const [users, setUsers] = useState<User[]>(mockUsers);
     const [roles, setRoles] = useState<Role[]>(mockRoles);
     const [ldapConfig, setLdapConfig] = useState<LdapConfig>(mockLdapConfig);
+    const [sharePointConfig, setSharePointConfig] = useState<SharePointConfig>(mockSharePointConfig);
     const [currentUser, setCurrentUser] = useState<User | null>(null);
     const [activeView, setActiveView] = useState<string>('dashboard');
 
@@ -113,13 +117,15 @@ const App: React.FC = () => {
                 return <RoleManagement />;
             case 'authentication':
                 return <Authentication />;
+            case 'sharepoint':
+                return <SharePoint />;
             default:
                 return <Dashboard />;
         }
     };
 
     return (
-        <DataContext.Provider value={{ practices, setPractices, users, setUsers, roles, setRoles, currentUser, ldapConfig, setLdapConfig }}>
+        <DataContext.Provider value={{ practices, setPractices, users, setUsers, roles, setRoles, currentUser, ldapConfig, setLdapConfig, sharePointConfig, setSharePointConfig }}>
             {!currentUser ? (
                 <Login onLogin={setCurrentUser} />
             ) : (

@@ -1,9 +1,13 @@
-
 export enum SemaphoreStatus {
     GREEN = 'Verde',
     RED = 'Rojo',
     GRAY = 'Gris',
     ORANGE = 'Naranja',
+}
+
+export enum ActivityStatus {
+    OPEN = 'Abierto',
+    CLOSED = 'Cerrado',
 }
 
 export enum AuthType {
@@ -13,8 +17,11 @@ export enum AuthType {
 
 export interface Document {
     id: string;
-    name: string;
+    name: string; // Will store the new, structured filename
+    originalName: string;
     url: string;
+    version: number;
+    uploadDate: string;
 }
 
 export interface Activity {
@@ -25,13 +32,15 @@ export interface Activity {
     dueDate: string | null;
     completionDate: string | null;
     progress: number;
-    status: SemaphoreStatus;
+    semaphoreStatus: SemaphoreStatus;
+    activityStatus: ActivityStatus;
     documents: Document[];
 }
 
 export interface Subcategory {
     id: string;
     name: string;
+    sharepointFolderPath?: string;
     activities: Activity[];
 }
 
@@ -66,6 +75,7 @@ export interface RolePermissions {
   canManageUsers: boolean; 
   canManageRoles: boolean; 
   canManageAuthSettings: boolean;
+  canManageSharePointSettings: boolean;
 
   // Activity-specific permissions
   canDeleteActivity: boolean;
@@ -101,6 +111,12 @@ export interface LdapConfig {
     usernameAttribute: string;
     fullNameAttribute: string;
     emailAttribute: string;
+}
+
+export interface SharePointConfig {
+    enabled: boolean;
+    siteUrl: string;
+    maxFileNameLength: number;
 }
 
 export enum AccessRequestStatus {

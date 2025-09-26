@@ -1,131 +1,13 @@
-
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../hooks/useData';
-import { Practice, Category, Subcategory, Activity, Document } from '../types';
-import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon, CheckIcon, XMarkIcon } from './Icons';
+import { Practice, Category, Subcategory, Activity, Document, ActivityStatus } from '../types';
+import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon, CheckIcon, XMarkIcon, DownloadIcon, EyeIcon, LockClosedIcon, LockOpenIcon } from './Icons';
 import Card from './ui/Card';
 import SemaphoreBadge from './ui/Badge';
 import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
 import Modal from './ui/Modal';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
-
-const ActivityForm: React.FC<{
-    activity: Partial<Activity> | null;
-    onClose: () => void;
-    onSave: (activity: Partial<Activity>) => void;
-}> = ({ activity, onClose, onSave }) => {
-    const [formData, setFormData] = useState({ ...activity, documents: activity?.documents || [] });
-    const { users } = useData();
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({...prev, [name]: value }));
-    };
-    
-    const handleProgressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const progress = parseInt(e.target.value, 10);
-        const completionDate = progress === 100 ? (formData?.completionDate || new Date().toISOString().split('T')[0]) : null;
-        setFormData(prev => ({ ...prev, progress, completionDate }));
-    };
-
-    const handleDeleteDocument = (docId: string) => {
-        setFormData(prev => ({
-            ...prev,
-            documents: prev.documents?.filter(d => d.id !== docId) || []
-        }));
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const newFiles = Array.from(e.target.files).map((file: File) => ({
-                id: `doc-${Date.now()}-${Math.random()}`,
-                name: file.name,
-                url: `#mock-url/${file.name}`
-            }));
-
-            setFormData(prev => ({
-                ...prev,
-                documents: [...(prev.documents || []), ...newFiles]
-            }));
-        }
-    };
-
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (formData) onSave(formData);
-    };
-
-    if (!formData) return null;
-
-    return (
-        <form onSubmit={handleSubmit} className="space-y-4">
-             <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre de la Actividad</label>
-                <input type="text" name="name" id="name" value={formData.name || ''} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/>
-            </div>
-            <div>
-                <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
-                <textarea name="description" id="description" value={formData.description || ''} onChange={handleChange} rows={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"></textarea>
-            </div>
-             <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label htmlFor="responsible" className="block text-sm font-medium text-gray-700">Responsable</label>
-                    <select name="responsible" id="responsible" value={formData.responsible || ''} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md">
-                        <option value="">Seleccionar...</option>
-                        {users.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-                    </select>
-                </div>
-                <div>
-                    <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700">Fecha de Vencimiento</label>
-                    <input type="date" name="dueDate" id="dueDate" value={formData.dueDate || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"/>
-                </div>
-             </div>
-             <div>
-                <label htmlFor="progress" className="block text-sm font-medium text-gray-700">Progreso: {formData.progress || 0}%</label>
-                <input type="range" min="0" max="100" name="progress" id="progress" value={formData.progress || 0} onChange={handleProgressChange} className="mt-1 block w-full"/>
-             </div>
-             <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Evidencias</label>
-                <div className="space-y-2">
-                    {formData.documents && formData.documents.map(doc => (
-                        <div key={doc.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md text-sm">
-                            <div className="flex items-center truncate">
-                                <PaperClipIcon className="w-4 h-4 mr-2 flex-shrink-0 text-gray-500" />
-                                <span className="truncate text-gray-800" title={doc.name}>{doc.name}</span>
-                            </div>
-                            <button 
-                                type="button" 
-                                onClick={() => handleDeleteDocument(doc.id)} 
-                                className="text-gray-400 hover:text-red-600 ml-2">
-                                <TrashIcon className="w-4 h-4" />
-                            </button>
-                        </div>
-                    ))}
-                </div>
-                <div className="mt-2">
-                    <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500 border border-dashed border-gray-300 p-2 text-center block">
-                        <span>Seleccionar archivos...</span>
-                        <input 
-                            id="file-upload" 
-                            name="file-upload" 
-                            type="file" 
-                            className="sr-only" 
-                            multiple
-                            onChange={handleFileChange}
-                            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
-                        />
-                    </label>
-                </div>
-            </div>
-            <div className="flex justify-end space-x-3 pt-4 border-t mt-4">
-                <button type="button" onClick={onClose} className="bg-white py-2 px-4 border border-gray-300 rounded-md text-sm">Cancelar</button>
-                <button type="submit" className="bg-indigo-600 text-white py-2 px-4 border rounded-md text-sm">Guardar</button>
-            </div>
-        </form>
-    );
-};
+import ActivityForm from './forms/ActivityForm';
 
 const PracticeForm: React.FC<{
     practice: Partial<Practice> | null;
@@ -168,9 +50,8 @@ const PracticeForm: React.FC<{
     );
 };
 
-
 const PracticesExplorer: React.FC = () => {
-    const { practices, setPractices, currentUser, users, roles } = useData();
+    const { practices, setPractices, currentUser, users, roles, sharePointConfig } = useData();
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
     const [selectedPractice, setSelectedPractice] = useState<Practice | null>(null);
     
@@ -178,7 +59,7 @@ const PracticesExplorer: React.FC = () => {
     const [editingActivity, setEditingActivity] = useState<Partial<Activity> | null>(null);
     const [modalContext, setModalContext] = useState<{ categoryId: string | null; subcategoryId: string | null }>({ categoryId: null, subcategoryId: null });
     
-    const [editing, setEditing] = useState<{ type: 'category' | 'subcategory' | null, id: string | null, name: string }>({ type: null, id: null, name: '' });
+    const [editing, setEditing] = useState<{ type: 'category' | 'subcategory' | 'path' | null, id: string | null, name: string }>({ type: null, id: null, name: '' });
     
     const [isPracticeModalOpen, setIsPracticeModalOpen] = useState(false);
     const [editingPractice, setEditingPractice] = useState<Partial<Practice> | null>(null);
@@ -186,11 +67,19 @@ const PracticesExplorer: React.FC = () => {
     const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
     const [expandedSubcategories, setExpandedSubcategories] = useState<Record<string, boolean>>({});
 
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+    const [previewingDocument, setPreviewingDocument] = useState<Document | null>(null);
+
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
 
     const [selectedYear, setSelectedYear] = useState<number | 'all'>(currentYear);
     const [selectedMonth, setSelectedMonth] = useState<number | 'all'>(currentMonth);
+
+    const handleSelectPractice = (practice: Practice) => {
+        setSelectedPractice(practice);
+        setEditing({ type: null, id: null, name: '' });
+    };
 
     useEffect(() => {
         if (selectedPractice) {
@@ -264,19 +153,16 @@ const PracticesExplorer: React.FC = () => {
         }, {} as Record<string, Practice[]>);
     }, [visiblePractices]);
 
-    const handleSelectPractice = (practice: Practice) => {
-        setSelectedPractice(practice);
-        setEditing({ type: null, id: null, name: '' });
-    };
     
     // Activity Handlers
     const handleAddActivity = (subcategoryId: string, categoryId: string) => {
         setModalContext({ categoryId, subcategoryId });
-        setEditingActivity({ documents: [] });
+        setEditingActivity({ documents: [], progress: 0, activityStatus: ActivityStatus.OPEN });
         setIsActivityModalOpen(true);
     };
     
     const handleEditActivity = (activity: Activity, subcategoryId: string, categoryId: string) => {
+        if (activity.activityStatus === ActivityStatus.CLOSED) return;
         setModalContext({ categoryId, subcategoryId });
         setEditingActivity(activity);
         setIsActivityModalOpen(true);
@@ -299,7 +185,8 @@ const PracticesExplorer: React.FC = () => {
                                 
                                 const finalActivity = {
                                     ...activityData,
-                                    status: calculateSemaphoreStatus(activityData),
+                                    semaphoreStatus: calculateSemaphoreStatus(activityData),
+                                    activityStatus: (activityData.progress ?? 0) === 100 ? ActivityStatus.CLOSED : ActivityStatus.OPEN,
                                 } as Activity;
 
                                 if (activityData.id) { // Editing existing
@@ -351,23 +238,14 @@ const PracticesExplorer: React.FC = () => {
     };
 
     const handleCloneActivity = (activityToClone: Activity, subcategoryId: string) => {
-        // FIX: Add type assertion to the result of JSON.parse. The `any` type
-        // from JSON.parse can corrupt type inference for the entire state, leading to
-        // unexpected errors. Asserting the type to `Activity` solves this.
-        const clonedActivityData = JSON.parse(JSON.stringify(activityToClone)) as Activity;
+        const newActivity = JSON.parse(JSON.stringify(activityToClone)) as Activity;
 
-        const newActivity: Partial<Activity> = {
-            ...clonedActivityData,
-            id: `a-${subcategoryId}-${Date.now()}`,
-            name: `Copia de ${clonedActivityData.name}`,
-            progress: 0,
-            completionDate: null,
-        };
-
-        const finalClonedActivity = {
-            ...newActivity,
-            status: calculateSemaphoreStatus(newActivity),
-        } as Activity;
+        newActivity.id = `a-${subcategoryId}-${Date.now()}`;
+        newActivity.name = `Copia de ${activityToClone.name}`;
+        newActivity.progress = 0;
+        newActivity.completionDate = null;
+        newActivity.activityStatus = ActivityStatus.OPEN; // Cloned activities are always open
+        newActivity.semaphoreStatus = calculateSemaphoreStatus(newActivity); // Recalculate status
 
         setPractices(prevPractices => {
             return prevPractices.map(p => {
@@ -380,7 +258,7 @@ const PracticesExplorer: React.FC = () => {
                             if (sc.id !== subcategoryId) return sc;
                             return {
                                 ...sc,
-                                activities: [...sc.activities, finalClonedActivity],
+                                activities: [...sc.activities, newActivity],
                             };
                         })
                     }))
@@ -389,8 +267,43 @@ const PracticesExplorer: React.FC = () => {
         });
     };
     
+     const handleReopenActivity = (activityId: string, subcategoryId: string) => {
+        setPractices(prevPractices => {
+            return prevPractices.map(p => {
+                if (p.id !== selectedPractice?.id) return p;
+                return {
+                    ...p,
+                    categories: p.categories.map(c => ({
+                        ...c,
+                        subcategories: c.subcategories.map(sc => {
+                            if (sc.id !== subcategoryId) return sc;
+                            return {
+                                ...sc,
+                                activities: sc.activities.map(a => {
+                                    if (a.id === activityId) {
+                                        const reopenedActivity = {
+                                            ...a,
+                                            activityStatus: ActivityStatus.OPEN,
+                                            progress: 99,
+                                            completionDate: null,
+                                        };
+                                        return {
+                                            ...reopenedActivity,
+                                            semaphoreStatus: calculateSemaphoreStatus(reopenedActivity),
+                                        }
+                                    }
+                                    return a;
+                                }),
+                            };
+                        })
+                    }))
+                };
+            });
+        });
+    };
+
     // Editing Handlers
-    const handleStartEdit = (type: 'category' | 'subcategory', id: string, name: string) => {
+    const handleStartEdit = (type: 'category' | 'subcategory' | 'path', id: string, name: string) => {
         setEditing({ type, id, name });
     };
 
@@ -402,18 +315,27 @@ const PracticesExplorer: React.FC = () => {
         if (!editing.id || !editing.type) return;
 
         setPractices(prev => prev.map(p => {
+            if (p.id !== selectedPractice?.id) return p;
+
+            let updatedPractice = { ...p };
+
             if (editing.type === 'category') {
-                const categoryExists = p.categories.some(c => c.id === editing.id);
-                if (!categoryExists) return p;
-                return { ...p, categories: p.categories.map(c => c.id === editing.id ? { ...c, name: editing.name } : c) };
+                updatedPractice.categories = updatedPractice.categories.map(c => c.id === editing.id ? { ...c, name: editing.name } : c);
             }
             if (editing.type === 'subcategory') {
-                 return { ...p, categories: p.categories.map(c => ({
+                updatedPractice.categories = updatedPractice.categories.map(c => ({
                     ...c,
                     subcategories: c.subcategories.map(s => s.id === editing.id ? { ...s, name: editing.name } : s)
-                 }))};
+                }));
             }
-            return p;
+            if (editing.type === 'path') {
+                 updatedPractice.categories = updatedPractice.categories.map(c => ({
+                    ...c,
+                    subcategories: c.subcategories.map(s => s.id === editing.id ? { ...s, sharepointFolderPath: editing.name } : s)
+                }));
+            }
+            
+            return updatedPractice;
         }));
         
         handleCancelEdit();
@@ -440,7 +362,12 @@ const PracticesExplorer: React.FC = () => {
     const handleAddSubcategory = (categoryId: string) => {
         const name = window.prompt('Introduce el nombre de la nueva subcategoría:');
         if (name) {
-            const newSubcategory: Subcategory = { id: `subcat-${Date.now()}`, name, activities: [] };
+            const newSubcategory: Subcategory = { 
+                id: `subcat-${Date.now()}`, 
+                name,
+                activities: [],
+                sharepointFolderPath: `Evidencias/${selectedPractice?.name.replace(/\s+/g, '_') || 'Practica'}/${name.replace(/\s+/g, '_')}`
+            };
             setPractices(prev => prev.map(p => p.id === selectedPractice?.id ? {
                 ...p,
                 categories: p.categories.map(c => c.id === categoryId ? { ...c, subcategories: [...c.subcategories, newSubcategory] } : c)
@@ -513,6 +440,13 @@ const PracticesExplorer: React.FC = () => {
         }));
     };
 
+    const handlePreview = (doc: Document) => {
+        setPreviewingDocument(doc);
+        setIsPreviewModalOpen(true);
+    };
+
+    const isPdf = (docName: string) => docName.toLowerCase().endsWith('.pdf');
+
     return (
         <div className="flex h-full space-x-6">
             <Modal isOpen={isActivityModalOpen} onClose={() => setIsActivityModalOpen(false)} title={editingActivity?.id ? 'Editar Actividad' : 'Nueva Actividad'}>
@@ -528,6 +462,20 @@ const PracticesExplorer: React.FC = () => {
                     onClose={() => setIsPracticeModalOpen(false)}
                     onSave={handleSavePractice}
                 />
+            </Modal>
+            <Modal 
+                isOpen={isPreviewModalOpen} 
+                onClose={() => setIsPreviewModalOpen(false)} 
+                title={previewingDocument?.name || 'Vista Previa'}
+                maxWidth="sm:max-w-4xl"
+            >
+                {previewingDocument && (
+                    <iframe 
+                        src={previewingDocument.url} 
+                        className="w-full h-[80vh]" 
+                        title={previewingDocument.name}
+                    ></iframe>
+                )}
             </Modal>
             
             <aside className="w-1/3 max-w-sm flex-shrink-0">
@@ -697,31 +645,101 @@ const PracticesExplorer: React.FC = () => {
                                                             </button>
                                                         )}
                                                     </div>
+
+                                                    <div className="pl-8 mt-1 mb-3">
+                                                        {editing.type === 'path' && editing.id === sub.id ? (
+                                                            <form onSubmit={e => { e.preventDefault(); handleSaveEdit(); }} className="flex items-center space-x-2 text-xs">
+                                                                <FolderIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                                                <input 
+                                                                    type="text" 
+                                                                    value={editing.name} 
+                                                                    onChange={e => setEditing(prev => ({ ...prev, name: e.target.value }))} 
+                                                                    autoFocus 
+                                                                    className="flex-grow font-mono text-indigo-800 bg-indigo-50 px-1 py-0.5 border border-indigo-300 rounded-md"
+                                                                />
+                                                                <button type="submit" className="text-green-600 hover:bg-green-100 p-1 rounded"><CheckIcon className="w-4 h-4" /></button>
+                                                                <button type="button" onClick={handleCancelEdit} className="text-red-600 hover:bg-red-100 p-1 rounded"><XMarkIcon className="w-4 h-4" /></button>
+                                                            </form>
+                                                        ) : (
+                                                            <div className="flex items-center group text-xs text-gray-600">
+                                                                <FolderIcon className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+                                                                <span>Ruta:</span>
+                                                                <code className="ml-2 bg-gray-100 px-1.5 py-0.5 rounded text-gray-700 font-mono truncate" title={sub.sharepointFolderPath || 'No definida'}>
+                                                                    {sub.sharepointFolderPath || 'No definida'}
+                                                                </code>
+                                                                {canUserEditThisCategory && (
+                                                                    <button onClick={() => handleStartEdit('path', sub.id, sub.sharepointFolderPath || '')} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-600 p-1 rounded-full hover:bg-gray-200 ml-1" title="Editar Ruta de SharePoint">
+                                                                        <PencilIcon className="w-3 h-3" />
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
                                                     {isSubExpanded && (
                                                     <div className="mt-3 pl-8">
                                                         {sub.activities.length > 0 ? (
                                                             <ul className="divide-y divide-gray-200">
                                                                 {sub.activities.map(act => (
-                                                                    <li key={act.id} className="py-3">
+                                                                    <li key={act.id} id={`activity-${act.id}`} className="py-3 px-2 -mx-2 transition-all duration-1000">
                                                                         <div className="flex items-center justify-between">
-                                                                            <div className="truncate">
-                                                                                <p className="font-medium text-gray-900 truncate" title={act.name}>{act.name}</p>
-                                                                                <p className="text-sm text-gray-500 truncate">{users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}</p>
+                                                                            <div className="flex items-center truncate">
+                                                                                {act.activityStatus === ActivityStatus.CLOSED ? 
+                                                                                    <LockClosedIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" /> : 
+                                                                                    <LockOpenIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
+                                                                                }
+                                                                                <div className="truncate">
+                                                                                    <p className="font-medium text-gray-900 truncate" title={act.name}>{act.name}</p>
+                                                                                    <p className="text-sm text-gray-500 truncate">{users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}</p>
+                                                                                </div>
                                                                             </div>
                                                                             <div className="ml-4 flex-shrink-0 flex items-center space-x-4">
                                                                                 <div className="text-right">
-                                                                                    <SemaphoreBadge status={act.status} completionDate={act.completionDate} />
+                                                                                    <SemaphoreBadge status={act.semaphoreStatus} completionDate={act.completionDate} />
                                                                                     <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
                                                                                 </div>
                                                                                 <div className="flex items-center space-x-1">
-                                                                                    {canUserEditThisCategory && (<button onClick={() => handleEditActivity(act, sub.id, cat.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>)}
-                                                                                    {userRole?.permissions.canCloneActivity && (<button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>)}
-                                                                                    {userRole?.permissions.canDeleteActivity && (<button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>)}
+                                                                                    {act.activityStatus === ActivityStatus.OPEN && (canUserEditThisCategory || act.responsible === currentUser?.id) && (<button onClick={() => handleEditActivity(act, sub.id, cat.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>)}
+                                                                                    {act.activityStatus === ActivityStatus.OPEN && userRole?.permissions.canCloneActivity && (<button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>)}
+                                                                                    {act.activityStatus === ActivityStatus.OPEN && userRole?.permissions.canDeleteActivity && (<button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>)}
+                                                                                    {act.activityStatus === ActivityStatus.CLOSED && userRole?.permissions.canViewAllCategories && (<button onClick={() => handleReopenActivity(act.id, sub.id)} className="text-gray-400 hover:text-green-600" title="Reabrir Actividad"><LockOpenIcon className="w-4 h-4" /></button>)}
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="mt-2 text-sm text-gray-600">{act.description}</div>
-                                                                        {act.documents.length > 0 && ( <div className="mt-2 flex items-center text-xs text-gray-500"><PaperClipIcon className="mr-1.5" /> {act.documents.length} adjuntos</div> )}
+                                                                        <div className="mt-2 text-sm text-gray-600 pl-6">{act.description}</div>
+                                                                        {act.documents.length > 0 && (
+                                                                            <div className="mt-3 pt-2 border-t border-gray-100 pl-6">
+                                                                                <h4 className="text-xs font-semibold text-gray-600 mb-2">Evidencias:</h4>
+                                                                                <p className="text-xs text-gray-500 mb-2">Ruta de SharePoint (simulada): <code>{`/${sharePointConfig.siteUrl.split('/').pop() || 'Site'}/${sub.sharepointFolderPath || '[Ruta-No-Definida]'}/`}</code></p>
+                                                                                <div className="space-y-2">
+                                                                                    {act.documents.sort((a, b) => a.originalName.localeCompare(b.originalName) || b.version - a.version).map(doc => (
+                                                                                        <div key={doc.id} className="flex items-center justify-between bg-gray-50 p-2 rounded-md text-sm hover:bg-gray-100">
+                                                                                            <div className="flex items-center truncate flex-grow">
+                                                                                                <PaperClipIcon className="w-4 h-4 mr-2 flex-shrink-0 text-gray-500" />
+                                                                                                <div className="truncate">
+                                                                                                    <span className="font-medium text-gray-800 truncate" title={doc.name}>{doc.name}</span>
+                                                                                                    <div className="text-xs text-gray-500">
+                                                                                                        <span>v{doc.version}</span>
+                                                                                                        <span className="mx-1.5">·</span>
+                                                                                                        <span>{formatDate(doc.uploadDate)}</span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
+                                                                                                {isPdf(doc.name) && (
+                                                                                                    <button onClick={() => handlePreview(doc)} className="text-gray-400 hover:text-blue-600" title="Previsualizar PDF">
+                                                                                                        <EyeIcon className="w-4 h-4" />
+                                                                                                    </button>
+                                                                                                )}
+                                                                                                <a href={doc.url} download={doc.name} className="text-gray-400 hover:text-indigo-600" title="Descargar archivo">
+                                                                                                    <DownloadIcon className="w-4 h-4" />
+                                                                                                </a>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))}
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
                                                                     </li>
                                                                 ))}
                                                             </ul>

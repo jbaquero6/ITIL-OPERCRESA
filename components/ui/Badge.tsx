@@ -16,9 +16,9 @@ const statusColors: Record<SemaphoreStatus, string> = {
 const getStatusLabel = (status: SemaphoreStatus, completionDate?: string | null): string => {
     switch (status) {
         case SemaphoreStatus.GREEN:
-            return 'Completado a tiempo';
+            return 'A tiempo / Completado';
         case SemaphoreStatus.RED:
-            return completionDate ? 'Completado atrasado' : 'Vencido';
+            return 'Vencido / Atrasado';
         case SemaphoreStatus.ORANGE:
             return 'Por iniciar';
         case SemaphoreStatus.GRAY:

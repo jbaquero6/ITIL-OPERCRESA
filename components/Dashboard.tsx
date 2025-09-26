@@ -1,11 +1,23 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../hooks/useData';
-import { Activity, SemaphoreStatus, Practice } from '../types';
+import { Activity, SemaphoreStatus, Practice, ActivityStatus } from '../types';
 import Card from './ui/Card';
-import { formatDate } from '../utils/helpers';
+import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
 import { ChevronDownIcon, ChevronRightIcon } from './Icons';
+import Modal from './ui/Modal';
+import ActivityForm from './forms/ActivityForm';
 
+interface EnhancedActivity extends Activity {
+    practiceId: string;
+    practiceName: string;
+    categoryId: string;
+    subcategoryId: string;
+    categoryName: string;
+    subcategoryName: string;
+}
+
+// FIX: Define the PracticeStats interface to resolve 'Cannot find name' error.
 interface PracticeStats {
     id: string;
     name: string;
@@ -13,12 +25,11 @@ interface PracticeStats {
     totalActivities: number;
     stats: Record<SemaphoreStatus, number>;
     percentages: Record<SemaphoreStatus, number>;
+    averageProgress: number;
 }
 
-type EnhancedActivity = Activity & { categoryName: string; subcategoryName: string; };
-
 const Dashboard: React.FC = () => {
-    const { practices, currentUser, users, roles } = useData();
+    const { practices, setPractices, currentUser, users, roles } = useData();
 
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth();
@@ -28,6 +39,45 @@ const Dashboard: React.FC = () => {
     const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(
         ITIL_PRACTICE_GROUPS.reduce((acc, group) => ({ ...acc, [group.name]: true }), {})
     );
+
+    const [selectedActivity, setSelectedActivity] = useState<EnhancedActivity | null>(null);
+
+    const handleSaveActivity = (activityData: Partial<Activity>) => {
+        if (!selectedActivity) return;
+
+        const { practiceId, categoryId, subcategoryId } = selectedActivity;
+
+        setPractices(prevPractices => {
+            return prevPractices.map(p => {
+                if (p.id !== practiceId) return p;
+                return {
+                    ...p,
+                    categories: p.categories.map(c => {
+                        if (c.id !== categoryId) return c;
+                        return {
+                            ...c,
+                            subcategories: c.subcategories.map(sc => {
+                                if (sc.id !== subcategoryId) return sc;
+                                
+                                const finalActivity = {
+                                    ...activityData,
+                                    semaphoreStatus: calculateSemaphoreStatus(activityData),
+                                    activityStatus: (activityData.progress ?? 0) === 100 ? ActivityStatus.CLOSED : ActivityStatus.OPEN,
+                                } as Activity;
+
+                                return {
+                                    ...sc,
+                                    activities: sc.activities.map(a => a.id === activityData.id ? finalActivity : a),
+                                };
+                            })
+                        };
+                    })
+                };
+            });
+        });
+        
+        setSelectedActivity(null); // Close modal on save
+    };
 
      const userRole = useMemo(() => {
         return currentUser ? roles.find(r => r.id === currentUser.roleId) : null;
@@ -68,6 +118,7 @@ const Dashboard: React.FC = () => {
             .filter(p => p.categories.length > 0);
     }, [practices, currentUser, userRole]);
 
+    // FIX: Corrected the type for filteredPracticeStats from a complex, incorrect type to PracticeStats[].
     const filteredPracticeStats: PracticeStats[] = useMemo(() => {
         return visiblePractices.map(practice => {
             const allActivities = practice.categories.flatMap(c => c.subcategories.flatMap(sc => sc.activities));
@@ -83,11 +134,13 @@ const Dashboard: React.FC = () => {
             });
 
             const stats = filteredActivities.reduce((acc, activity) => {
-                acc[activity.status] = (acc[activity.status] || 0) + 1;
+                acc[activity.semaphoreStatus] = (acc[activity.semaphoreStatus] || 0) + 1;
                 return acc;
             }, {} as Record<SemaphoreStatus, number>);
 
             const total = filteredActivities.length;
+            const totalProgress = filteredActivities.reduce((sum, act) => sum + (act.progress || 0), 0);
+            const averageProgress = total > 0 ? totalProgress / total : 0;
 
             return {
                 id: practice.id,
@@ -100,7 +153,8 @@ const Dashboard: React.FC = () => {
                     [SemaphoreStatus.RED]: total > 0 ? ((stats[SemaphoreStatus.RED] || 0) / total) * 100 : 0,
                     [SemaphoreStatus.ORANGE]: total > 0 ? ((stats[SemaphoreStatus.ORANGE] || 0) / total) * 100 : 0,
                     [SemaphoreStatus.GRAY]: total > 0 ? ((stats[SemaphoreStatus.GRAY] || 0) / total) * 100 : 0,
-                }
+                },
+                averageProgress,
             };
         });
     }, [visiblePractices, selectedYear, selectedMonth]);
@@ -117,6 +171,9 @@ const Dashboard: React.FC = () => {
                 });
                 return acc;
             }, { [SemaphoreStatus.GREEN]: 0, [SemaphoreStatus.RED]: 0, [SemaphoreStatus.GRAY]: 0, [SemaphoreStatus.ORANGE]: 0 });
+
+            const totalProgressSum = practicesInGroup.reduce((sum, p) => sum + (p.averageProgress * p.totalActivities), 0);
+            const averageProgress = totalActivities > 0 ? totalProgressSum / totalActivities : 0;
     
             return {
                 name: group.name,
@@ -127,7 +184,8 @@ const Dashboard: React.FC = () => {
                     [SemaphoreStatus.RED]: totalActivities > 0 ? (stats[SemaphoreStatus.RED] / totalActivities) * 100 : 0,
                     [SemaphoreStatus.ORANGE]: totalActivities > 0 ? (stats[SemaphoreStatus.ORANGE] / totalActivities) * 100 : 0,
                     [SemaphoreStatus.GRAY]: totalActivities > 0 ? (stats[SemaphoreStatus.GRAY] / totalActivities) * 100 : 0,
-                }
+                },
+                averageProgress,
             };
         });
     }, [filteredPracticeStats]);
@@ -159,6 +217,10 @@ const Dashboard: React.FC = () => {
 
                             const enhancedActivity: EnhancedActivity = {
                                 ...activity,
+                                practiceId: practice.id,
+                                practiceName: practice.name,
+                                categoryId: category.id,
+                                subcategoryId: subcategory.id,
                                 categoryName: category.name,
                                 subcategoryName: subcategory.name,
                             };
@@ -198,19 +260,25 @@ const Dashboard: React.FC = () => {
         return (
             <ul className="divide-y divide-gray-100">
                 {activities.map(act => (
-                    <li key={act.id} className="py-3">
-                        <div className="flex justify-between items-start">
-                             <div className="flex-1 overflow-hidden">
-                                <p className="text-sm font-medium text-gray-800 truncate" title={act.name}>{act.name}</p>
-                                <p className="text-xs text-gray-500 truncate" title={`${act.categoryName} / ${act.subcategoryName}`}>
-                                    {act.categoryName} / {act.subcategoryName}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1 truncate">
-                                    <span className="font-semibold">Resp:</span> {users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}
-                                </p>
+                    <li key={act.id} className="py-2">
+                        <button
+                            onClick={() => setSelectedActivity(act)}
+                            className="w-full text-left transition-colors hover:bg-gray-50 p-2 -m-2 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                            aria-label={`Ir a la actividad ${act.name}`}
+                        >
+                            <div className="flex justify-between items-start">
+                                 <div className="flex-1 overflow-hidden">
+                                    <p className="text-sm font-medium text-gray-800 truncate" title={act.name}>{act.name}</p>
+                                    <p className="text-xs text-gray-500 truncate" title={`${act.categoryName} / ${act.subcategoryName}`}>
+                                        {act.practiceName} / {act.categoryName}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-1 truncate">
+                                        <span className="font-semibold">Resp:</span> {users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}
+                                    </p>
+                                </div>
+                                <span className="text-sm font-medium text-gray-600 flex-shrink-0 ml-2">{formatDate(act.dueDate)}</span>
                             </div>
-                            <span className="text-sm font-medium text-gray-600 flex-shrink-0 ml-2">{formatDate(act.dueDate)}</span>
-                        </div>
+                        </button>
                     </li>
                 ))}
             </ul>
@@ -219,6 +287,13 @@ const Dashboard: React.FC = () => {
 
     return (
         <div className="space-y-6">
+             <Modal isOpen={!!selectedActivity} onClose={() => setSelectedActivity(null)} title={selectedActivity?.id ? 'Editar Actividad' : 'Nueva Actividad'}>
+                <ActivityForm 
+                    activity={selectedActivity} 
+                    onClose={() => setSelectedActivity(null)}
+                    onSave={handleSaveActivity}
+                />
+            </Modal>
             <div className="flex justify-between items-center">
                  <h1 className="text-3xl font-bold text-gray-800">Panel de Control</h1>
                  <div className="flex items-center space-x-2">
@@ -250,7 +325,15 @@ const Dashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
                     {consolidatedGroupStats.map(group => (
                          <Card key={group.name}>
-                            <h3 className="font-semibold text-lg truncate text-indigo-700" title={group.name}>{group.name}</h3>
+                            <div className="flex justify-between items-start">
+                                <h3 className="font-semibold text-lg truncate text-indigo-700 flex-1" title={group.name}>{group.name}</h3>
+                                {group.totalActivities > 0 && (
+                                    <div className="text-right ml-2 flex-shrink-0">
+                                        <p className="font-bold text-xl text-indigo-800">{Math.round(group.averageProgress)}%</p>
+                                        <p className="text-xs text-indigo-600 -mt-1">Avance</p>
+                                    </div>
+                                )}
+                            </div>
                             <p className="text-sm text-gray-500 mb-4">
                                 {group.totalActivities} actividades {periodText}
                             </p>
@@ -263,9 +346,9 @@ const Dashboard: React.FC = () => {
                                         <div className="bg-gray-400 h-2.5 rounded-r-full" style={{ width: `${group.percentages[SemaphoreStatus.GRAY]}%` }}></div>
                                     </div>
                                     <div className="flex flex-col space-y-1 text-sm mt-3">
-                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>Completado a tiempo: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.GREEN] || 0}</span></div>
+                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>A tiempo / Completado: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.GREEN] || 0}</span></div>
                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>Por iniciar: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.ORANGE] || 0}</span></div>
-                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Atrasado/Vencido: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.RED] || 0}</span></div>
+                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Vencido / Atrasado: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.RED] || 0}</span></div>
                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>No iniciado: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.GRAY] || 0}</span></div>
                                     </div>
                                 </>
@@ -303,8 +386,16 @@ const Dashboard: React.FC = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                             {practicesInGroup.map(practice => (
                                                 <Card key={practice.id} className="!p-4 !shadow-md">
-                                                    <h3 className="font-semibold text-base truncate" title={practice.name}>{practice.name}</h3>
-                                                    <p className="text-xs text-gray-500 mb-3">
+                                                     <div className="flex justify-between items-start">
+                                                        <h3 className="font-semibold text-base truncate flex-1" title={practice.name}>{practice.name}</h3>
+                                                        {practice.totalActivities > 0 && (
+                                                            <div className="text-right ml-2 flex-shrink-0">
+                                                                <p className="font-bold text-lg text-gray-800">{Math.round(practice.averageProgress)}%</p>
+                                                                <p className="text-xs text-gray-500 -mt-1">Avance</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-gray-500 mb-3 -mt-2">
                                                         {practice.totalActivities} actividades {periodText}
                                                     </p>
                                                     <div className="w-full bg-gray-200 rounded-full h-2 my-2 flex">
@@ -314,9 +405,9 @@ const Dashboard: React.FC = () => {
                                                         <div className="bg-gray-400 h-2 rounded-r-full" style={{ width: `${practice.percentages[SemaphoreStatus.GRAY]}%` }}></div>
                                                     </div>
                                                     <div className="flex flex-col space-y-1 text-xs mt-2">
-                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>A tiempo: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GREEN] || 0}</span></div>
+                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-green-500 mr-2"></span>A tiempo / Completado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GREEN] || 0}</span></div>
                                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>Por iniciar: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.ORANGE] || 0}</span></div>
-                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Vencido: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.RED] || 0}</span></div>
+                                                        <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Vencido / Atrasado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.RED] || 0}</span></div>
                                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>No iniciado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GRAY] || 0}</span></div>
                                                     </div>
                                                 </Card>

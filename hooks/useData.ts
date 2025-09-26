@@ -1,6 +1,6 @@
 // Fix: Import Dispatch and SetStateAction to use them as types directly.
 import { createContext, useContext, Dispatch, SetStateAction } from 'react';
-import { Practice, User, LdapConfig, Role } from '../types';
+import { Practice, User, LdapConfig, Role, SharePointConfig } from '../types';
 
 interface IDataContext {
     practices: Practice[];
@@ -12,6 +12,8 @@ interface IDataContext {
     currentUser: User | null;
     ldapConfig: LdapConfig;
     setLdapConfig: Dispatch<SetStateAction<LdapConfig>>;
+    sharePointConfig: SharePointConfig;
+    setSharePointConfig: Dispatch<SetStateAction<SharePointConfig>>;
 }
 
 export const DataContext = createContext<IDataContext | undefined>(undefined);
