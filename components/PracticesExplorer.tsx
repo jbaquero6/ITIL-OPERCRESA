@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../hooks/useData';
 import { Practice, Category, Subcategory, Activity, Document, ActivityStatus } from '../types';
-import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon, CheckIcon, XMarkIcon, DownloadIcon, EyeIcon, LockClosedIcon, LockOpenIcon } from './Icons';
+import { ChevronRightIcon, ChevronDownIcon, PlusIcon, PencilIcon, TrashIcon, PaperClipIcon, FolderIcon, DuplicateIcon, CheckIcon, XMarkIcon, DownloadIcon, EyeIcon, LockOpenIcon } from './Icons';
 import Card from './ui/Card';
 import SemaphoreBadge from './ui/Badge';
 import { formatDate, calculateSemaphoreStatus } from '../utils/helpers';
 import Modal from './ui/Modal';
 import { ITIL_PRACTICE_GROUPS } from '../constants';
 import ActivityForm from './forms/ActivityForm';
+import ActivityStatusBadge from './ui/ActivityStatusBadge';
 
 const PracticeForm: React.FC<{
     practice: Partial<Practice> | null;
@@ -162,7 +163,12 @@ const PracticesExplorer: React.FC = () => {
     };
     
     const handleEditActivity = (activity: Activity, subcategoryId: string, categoryId: string) => {
-        if (activity.activityStatus === ActivityStatus.CLOSED) return;
+        if (activity.activityStatus === ActivityStatus.CLOSED) {
+            setModalContext({ categoryId, subcategoryId });
+            setEditingActivity(activity);
+            setIsActivityModalOpen(true);
+            return;
+        }
         setModalContext({ categoryId, subcategoryId });
         setEditingActivity(activity);
         setIsActivityModalOpen(true);
@@ -684,10 +690,6 @@ const PracticesExplorer: React.FC = () => {
                                                                     <li key={act.id} id={`activity-${act.id}`} className="py-3 px-2 -mx-2 transition-all duration-1000">
                                                                         <div className="flex items-center justify-between">
                                                                             <div className="flex items-center truncate">
-                                                                                {act.activityStatus === ActivityStatus.CLOSED ? 
-                                                                                    <LockClosedIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" /> : 
-                                                                                    <LockOpenIcon className="w-4 h-4 mr-2 text-gray-400 flex-shrink-0" />
-                                                                                }
                                                                                 <div className="truncate">
                                                                                     <p className="font-medium text-gray-900 truncate" title={act.name}>{act.name}</p>
                                                                                     <p className="text-sm text-gray-500 truncate">{users.find(u => u.id === act.responsible)?.fullName || 'Sin asignar'}</p>
@@ -695,11 +697,18 @@ const PracticesExplorer: React.FC = () => {
                                                                             </div>
                                                                             <div className="ml-4 flex-shrink-0 flex items-center space-x-4">
                                                                                 <div className="text-right">
-                                                                                    <SemaphoreBadge status={act.semaphoreStatus} completionDate={act.completionDate} />
-                                                                                    <p className="text-xs text-gray-500 mt-1">Vence: {formatDate(act.dueDate)}</p>
+                                                                                    <div className="flex items-center justify-end space-x-2 mb-1">
+                                                                                        <ActivityStatusBadge status={act.activityStatus} />
+                                                                                        <SemaphoreBadge status={act.semaphoreStatus} completionDate={act.completionDate} />
+                                                                                    </div>
+                                                                                    <p className="text-xs text-gray-500">Vence: {formatDate(act.dueDate)}</p>
                                                                                 </div>
                                                                                 <div className="flex items-center space-x-1">
-                                                                                    {act.activityStatus === ActivityStatus.OPEN && (canUserEditThisCategory || act.responsible === currentUser?.id) && (<button onClick={() => handleEditActivity(act, sub.id, cat.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>)}
+                                                                                    {act.activityStatus === ActivityStatus.OPEN && (canUserEditThisCategory || act.responsible === currentUser?.id) ? (
+                                                                                        <button onClick={() => handleEditActivity(act, sub.id, cat.id)} className="text-gray-400 hover:text-indigo-600" title="Editar Actividad"><PencilIcon className="w-4 h-4" /></button>
+                                                                                    ) : (
+                                                                                        <button onClick={() => handleEditActivity(act, sub.id, cat.id)} className="text-gray-400 hover:text-indigo-600" title="Ver Actividad"><EyeIcon className="w-4 h-4" /></button>
+                                                                                    )}
                                                                                     {act.activityStatus === ActivityStatus.OPEN && userRole?.permissions.canCloneActivity && (<button onClick={() => handleCloneActivity(act, sub.id)} className="text-gray-400 hover:text-blue-600" title="Clonar Actividad"><DuplicateIcon className="w-4 h-4" /></button>)}
                                                                                     {act.activityStatus === ActivityStatus.OPEN && userRole?.permissions.canDeleteActivity && (<button onClick={() => handleDeleteActivity(act.id, sub.id)} className="text-gray-400 hover:text-red-600" title="Eliminar Actividad"><TrashIcon className="w-4 h-4" /></button>)}
                                                                                     {act.activityStatus === ActivityStatus.CLOSED && userRole?.permissions.canViewAllCategories && (<button onClick={() => handleReopenActivity(act.id, sub.id)} className="text-gray-400 hover:text-green-600" title="Reabrir Actividad"><LockOpenIcon className="w-4 h-4" /></button>)}

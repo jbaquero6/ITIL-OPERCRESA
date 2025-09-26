@@ -24,6 +24,7 @@ interface PracticeStats {
     group: string;
     totalActivities: number;
     stats: Record<SemaphoreStatus, number>;
+    activityStatusStats: Record<ActivityStatus, number>;
     percentages: Record<SemaphoreStatus, number>;
     averageProgress: number;
 }
@@ -138,6 +139,11 @@ const Dashboard: React.FC = () => {
                 return acc;
             }, {} as Record<SemaphoreStatus, number>);
 
+            const activityStatusStats = filteredActivities.reduce((acc, activity) => {
+                acc[activity.activityStatus] = (acc[activity.activityStatus] || 0) + 1;
+                return acc;
+            }, {} as Record<ActivityStatus, number>);
+
             const total = filteredActivities.length;
             const totalProgress = filteredActivities.reduce((sum, act) => sum + (act.progress || 0), 0);
             const averageProgress = total > 0 ? totalProgress / total : 0;
@@ -148,6 +154,7 @@ const Dashboard: React.FC = () => {
                 group: practice.group,
                 totalActivities: total,
                 stats,
+                activityStatusStats,
                 percentages: {
                     [SemaphoreStatus.GREEN]: total > 0 ? ((stats[SemaphoreStatus.GREEN] || 0) / total) * 100 : 0,
                     [SemaphoreStatus.RED]: total > 0 ? ((stats[SemaphoreStatus.RED] || 0) / total) * 100 : 0,
@@ -172,6 +179,13 @@ const Dashboard: React.FC = () => {
                 return acc;
             }, { [SemaphoreStatus.GREEN]: 0, [SemaphoreStatus.RED]: 0, [SemaphoreStatus.GRAY]: 0, [SemaphoreStatus.ORANGE]: 0 });
 
+            const activityStatusStats: Record<ActivityStatus, number> = practicesInGroup.reduce((acc, p) => {
+                (Object.keys(p.activityStatusStats) as ActivityStatus[]).forEach(status => {
+                    acc[status] = (acc[status] || 0) + (p.activityStatusStats[status] || 0);
+                });
+                return acc;
+            }, { [ActivityStatus.OPEN]: 0, [ActivityStatus.CLOSED]: 0 });
+
             const totalProgressSum = practicesInGroup.reduce((sum, p) => sum + (p.averageProgress * p.totalActivities), 0);
             const averageProgress = totalActivities > 0 ? totalProgressSum / totalActivities : 0;
     
@@ -179,6 +193,7 @@ const Dashboard: React.FC = () => {
                 name: group.name,
                 totalActivities,
                 stats,
+                activityStatusStats,
                 percentages: {
                     [SemaphoreStatus.GREEN]: totalActivities > 0 ? (stats[SemaphoreStatus.GREEN] / totalActivities) * 100 : 0,
                     [SemaphoreStatus.RED]: totalActivities > 0 ? (stats[SemaphoreStatus.RED] / totalActivities) * 100 : 0,
@@ -350,6 +365,10 @@ const Dashboard: React.FC = () => {
                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>Por iniciar: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.ORANGE] || 0}</span></div>
                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Vencido / Atrasado: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.RED] || 0}</span></div>
                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>No iniciado: <span className="font-medium ml-auto">{group.stats[SemaphoreStatus.GRAY] || 0}</span></div>
+                                        <div className="pt-2 mt-2 border-t border-indigo-100">
+                                            <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>Abiertas: <span className="font-medium ml-auto">{group.activityStatusStats?.[ActivityStatus.OPEN] || 0}</span></div>
+                                            <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-500 mr-2"></span>Cerradas: <span className="font-medium ml-auto">{group.activityStatusStats?.[ActivityStatus.CLOSED] || 0}</span></div>
+                                        </div>
                                     </div>
                                 </>
                             ) : (
@@ -409,6 +428,10 @@ const Dashboard: React.FC = () => {
                                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-orange-500 mr-2"></span>Por iniciar: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.ORANGE] || 0}</span></div>
                                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-red-500 mr-2"></span>Vencido / Atrasado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.RED] || 0}</span></div>
                                                         <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-400 mr-2"></span>No iniciado: <span className="font-medium ml-auto">{practice.stats[SemaphoreStatus.GRAY] || 0}</span></div>
+                                                        <div className="pt-2 mt-2 border-t border-gray-100">
+                                                            <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-blue-500 mr-2"></span>Abiertas: <span className="font-medium ml-auto">{practice.activityStatusStats?.[ActivityStatus.OPEN] || 0}</span></div>
+                                                            <div className="flex items-center"><span className="w-2 h-2 rounded-full bg-gray-500 mr-2"></span>Cerradas: <span className="font-medium ml-auto">{practice.activityStatusStats?.[ActivityStatus.CLOSED] || 0}</span></div>
+                                                        </div>
                                                     </div>
                                                 </Card>
                                             ))}

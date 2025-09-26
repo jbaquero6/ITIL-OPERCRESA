@@ -16,7 +16,7 @@ const ActivityForm: React.FC<{
     const [confirmationRequired, setConfirmationRequired] = useState<Document[]>([]);
     const [isConfirmationModalOpen, setIsConfirmationModalOpen] = useState(false);
 
-    const isActivityClosed = formData.activityStatus === ActivityStatus.CLOSED;
+    const isActivityClosed = activity?.activityStatus === ActivityStatus.CLOSED;
 
     const clearErrorOnChange = (callback: () => void) => {
         setError(null);
